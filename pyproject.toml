@@ -45,3 +45,6 @@ select = [
     "UP",  # moderniseer syntax voor je Python-versie
     "B",   # veelvoorkomende bugs
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
