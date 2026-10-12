@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-f1-predictor = "f1_predictor:main"
+f1 = "f1_predictor.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]
