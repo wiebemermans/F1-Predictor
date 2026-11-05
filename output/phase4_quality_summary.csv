@@ -1,0 +1,2 @@
+rows,seasons,races,driver_race_rows,duplicate_driver_race_rows,missing_values,grid_finish_spearman,avg_finish_position,median_finish_position,min_finish_position,max_finish_position
+5479,13,269,5479,0,"{'quali_position': 22, 'season': 0, 'race_name': 0, 'round': 0, 'date': 0, 'driver_id': 0, 'driver_code': 0, 'circuit_id': 0, 'constructor_id': 0, 'grid': 0, 'position_text': 0, 'finish_position': 0, 'status': 0, 'points': 0, 'laps': 0, 'sprint_points': 0}",0.6005985001497108,10.70140536594269,11.0,1,22
