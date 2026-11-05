@@ -20,6 +20,8 @@ class QualitySummary(TypedDict):
     median_finish_position: float
     min_finish_position: int
     max_finish_position: int
+    numeric_ranges: dict[str, tuple[float, float]]
+    invalid_domain_values: dict[str, int]
 
 
 def load_all_results(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
@@ -43,6 +45,8 @@ def _retirement_mask(status: pd.Series) -> pd.Series:
 def build_quality_summary(df: pd.DataFrame) -> QualitySummary:
     """Belangrijkste kwaliteits- en analysecijfers voor fase 4."""
     grid_finish_spearman = df["grid"].corr(df["finish_position"], method="spearman")
+    race_size = df.groupby(["season", "round"])["driver_id"].transform("size")
+    numeric_columns = ["grid", "finish_position", "points", "sprint_points", "laps"]
     summary: QualitySummary = {
         "rows": int(len(df)),
         "seasons": int(df["season"].nunique()),
@@ -60,6 +64,18 @@ def build_quality_summary(df: pd.DataFrame) -> QualitySummary:
         "median_finish_position": float(df["finish_position"].median()),
         "min_finish_position": int(df["finish_position"].min()),
         "max_finish_position": int(df["finish_position"].max()),
+        "numeric_ranges": {
+            column: (float(df[column].min()), float(df[column].max())) for column in numeric_columns
+        },
+        "invalid_domain_values": {
+            "negative_grid": int((df["grid"] < 0).sum()),
+            "finish_position_outside_race_field": int(
+                ((df["finish_position"] < 1) | (df["finish_position"] > race_size)).sum()
+            ),
+            "negative_points": int((df["points"] < 0).sum()),
+            "negative_sprint_points": int((df["sprint_points"] < 0).sum()),
+            "negative_laps": int((df["laps"] < 0).sum()),
+        },
     }
     return summary
 
@@ -158,6 +174,14 @@ def build_report(
         f"| {row['driver_id']} | {row['circuit_id']} | {row['delta_vs_driver_mean']:.2f} |"
         for _, row in worst_driver.iterrows()
     )
+    range_rows = "\n".join(
+        f"| {column} | {minimum:g} | {maximum:g} |"
+        for column, (minimum, maximum) in quality["numeric_ranges"].items()
+    )
+    invalid_rows = "\n".join(
+        f"| {check.replace('_', ' ')} | {count} |"
+        for check, count in quality["invalid_domain_values"].items()
+    )
 
     return (
         "# Fase 4: Data verkennen\n\n"
@@ -172,6 +196,18 @@ def build_report(
         f"{quality['grid_finish_spearman']:.4f}\n"
         f"- Gemiddelde finishpositie: {quality['avg_finish_position']:.2f}\n"
         f"- Mediaan finishpositie: {quality['median_finish_position']:.2f}\n\n"
+        "## Bereiken en domeincontrole\n\n"
+        "Numerieke bereiken zijn gecontroleerd op onmogelijke waarden. Een generieke "
+        "IQR-regel is hier niet toegepast: startplaatsen, rondes, punten en rondetotalen "
+        "zijn discrete waarden die per seizoen en racecontext verschillen. `grid = 0` "
+        "en `laps = 0` zijn geldige pitlane-starten/niet gestarte of vroeg uitgevallen "
+        "deelnemers en worden niet als fout aangemerkt.\n\n"
+        "| Kolom | Minimum | Maximum |\n"
+        "|---|---:|---:|\n"
+        f"{range_rows}\n\n"
+        "| Domeincontrole | Ongeldige rijen |\n"
+        "|---|---:|\n"
+        f"{invalid_rows}\n\n"
         "## Belangrijkste observaties\n\n"
         "1. De gridpositie is een sterke maar niet perfecte voorspeller van de "
         "eindklassering. De Spearman-correlatie van "
