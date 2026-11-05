@@ -11,6 +11,26 @@
 - Gemiddelde finishpositie: 10.70
 - Mediaan finishpositie: 11.00
 
+## Bereiken en domeincontrole
+
+Numerieke bereiken zijn gecontroleerd op onmogelijke waarden. Een generieke IQR-regel is hier niet toegepast: startplaatsen, rondes, punten en rondetotalen zijn discrete waarden die per seizoen en racecontext verschillen. `grid = 0` en `laps = 0` zijn geldige pitlane-starten/niet gestarte of vroeg uitgevallen deelnemers en worden niet als fout aangemerkt.
+
+| Kolom | Minimum | Maximum |
+|---|---:|---:|
+| grid | 0 | 22 |
+| finish_position | 1 | 22 |
+| points | 0 | 50 |
+| sprint_points | 0 | 8 |
+| laps | 0 | 87 |
+
+| Domeincontrole | Ongeldige rijen |
+|---|---:|
+| negative grid | 0 |
+| finish position outside race field | 0 |
+| negative points | 0 |
+| negative sprint points | 0 |
+| negative laps | 0 |
+
 ## Belangrijkste observaties
 
 1. De gridpositie is een sterke maar niet perfecte voorspeller van de eindklassering. De Spearman-correlatie van 0.6006 laat zien dat startpositie veel verklaart, maar dat race-ruis en uitvallers nog steeds belangrijk zijn.
