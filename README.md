@@ -6,6 +6,10 @@ Een machine-learningmodel dat de uitslag van Formule 1-races voorspelt, getest m
 
 Data: [Jolpica-F1](https://github.com/jolpica/jolpica-f1) API.
 
+## Transparantie
+
+Dit project is grotendeels ontwikkeld met hulp van een large language model (LLM). De code en resultaten worden waar mogelijk gecontroleerd met tests, linting en reproduceerbare analyses; LLM-gebruik vervangt die controles of menselijke beoordeling niet.
+
 ## Documentatie
 
 - [Ontwikkelomgeving en kwaliteitscontroles](docs/development.md)
