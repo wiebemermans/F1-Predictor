@@ -223,21 +223,21 @@ df["driver_form_5"] = df.groupby("driver")["finish_position"].transform(
 
 **Featuregroepen** (voeg ze één voor één toe en meet telkens de backtest):
 
-- [ ] Startpositie: `grid` of `quali_position` volgens het gekozen voorspelmoment; een kwalificatiegat tot polesitter vereist kwalificatietijden en valt buiten de eerste versie zolang die niet worden opgehaald
-- [ ] Coureursvorm: gemiddelde finish en punten over laatste 3 en 5 races, uitvalpercentage
-- [ ] Teamvorm: gemiddelde team-finish en punten over recente races (vangt autosterkte op)
-- [ ] Kampioenschapspositie vóór de race
-- [ ] Circuit-historiek van de coureur (met shrinkage naar het gemiddelde bij weinig data)
-- [ ] Teamgenoot-vergelijking
+- [x] Startpositie: `grid` of `quali_position` volgens het gekozen voorspelmoment; een kwalificatiegat tot polesitter vereist kwalificatietijden en valt buiten de eerste versie zolang die niet worden opgehaald
+- [x] Coureursvorm: gemiddelde finish en punten over laatste 3 en 5 races, uitvalpercentage
+- [x] Teamvorm: gemiddelde team-finish en punten over recente races (vangt autosterkte op)
+- [x] Kampioenschapspositie vóór de race
+- [x] Circuit-historiek van de coureur (met shrinkage naar het gemiddelde bij weinig data)
+- [x] Teamgenoot-vergelijking
 - [ ] Later: weer, bandenstrategie, rondetijden uit trainingen (FP2-longruns)
 
 **Praktisch**
 
-- [ ] Elke featuregroep in een eigen functie in `features/`, aan/uit te zetten via de config
-- [ ] Leakage-test in pytest: wijzig de uitslag van race N kunstmatig en controleer dat de features van race N niet veranderen
-- [ ] Experimentenlogboek bijhouden (feature, backtestscore, conclusie)
-- [ ] CLI-commando `f1 features` dat een tabel bouwt in `data/processed/`
-- [ ] **Documentatie bijwerken:** leg per feature de betekenis, databron, beschikbaarheid op het voorspelmoment en behandeling van ontbrekende waarden vast (bijvoorbeeld in `docs/features.md`). Beschrijf ook hoe je features bouwt en hoe de leakage-regel is getest.
+- [x] Elke featuregroep in een eigen functie in `features/`, aan/uit te zetten via de config (`FeatureConfig`; `config.yaml` volgt in fase 8)
+- [x] Leakage-test in pytest: wijzig de uitslag van race N kunstmatig en controleer dat de features van race N niet veranderen
+- [x] Experimentenlogboek bijhouden (feature, backtestscore, conclusie); scores in `output/backtest_features.csv`
+- [x] CLI-commando `f1 features` dat een tabel bouwt in `data/processed/`
+- [x] **Documentatie bijgewerkt:** betekenis, databron, beschikbaarheid op het voorspelmoment en behandeling van ontbrekende waarden per feature, het bouwen van de featuretabel, de leakage-tests en het experimentenlogboek staan in [`docs/features.md`](docs/features.md).
 
 **Klaar wanneer:** `f1 features` werkt en de leakage-test slaagt.
 
