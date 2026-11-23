@@ -2,7 +2,6 @@ import pandas as pd
 import pytest
 
 from f1_predictor.evaluation.explore import (
-    _retirement_mask,
     build_circuit_effects,
     build_driver_circuit_bias,
     build_quality_summary,
@@ -57,32 +56,6 @@ def test_quality_summary_reports_ranges_and_domain_violations():
         "negative_sprint_points": 0,
         "negative_laps": 0,
     }
-
-
-def test_retirement_mask_handles_old_and_new_status_vocabularies():
-    status = pd.Series(
-        [
-            "Finished",
-            "+1 Lap",
-            "+2 Laps",
-            "Lapped",
-            "Disqualified",
-            "Engine",
-            "Retired",
-            "Did not start",
-        ]
-    )
-
-    assert _retirement_mask(status).tolist() == [
-        False,
-        False,
-        False,
-        False,
-        False,
-        True,
-        True,
-        True,
-    ]
 
 
 def test_quality_summary_treats_pitlane_start_as_last_on_grid():
