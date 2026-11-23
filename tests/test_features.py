@@ -2,7 +2,9 @@ import math
 
 import pandas as pd
 import pytest
+from typer.testing import CliRunner
 
+from f1_predictor import cli
 from f1_predictor.features.build import (
     FEATURE_GROUPS,
     FeatureConfig,
@@ -369,3 +371,25 @@ def test_write_feature_table_writes_parquet(tmp_path):
     assert len(saved) == len(table) == len(data)
     assert set(feature_columns()).issubset(saved.columns)
     assert not output_path.with_suffix(".parquet.tmp").exists()
+
+
+def test_cli_features_builds_table(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli, "write_feature_table", lambda: calls.append(True))
+
+    result = CliRunner().invoke(cli.app, ["features"])
+
+    assert result.exit_code == 0
+    assert calls == [True]
+
+
+def test_cli_features_reports_missing_raw_data(monkeypatch):
+    def missing_data():
+        raise FileNotFoundError("Geen parquet-bestanden gevonden in data/raw")
+
+    monkeypatch.setattr(cli, "write_feature_table", missing_data)
+
+    result = CliRunner().invoke(cli.app, ["features"])
+
+    assert result.exit_code == 1
+    assert "f1 fetch" in result.output
