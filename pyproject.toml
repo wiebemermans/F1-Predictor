@@ -1,7 +1,7 @@
 [project]
 name = "f1-predictor"
 version = "0.1.0"
-description = "Add your description here"
+description = "Voorspelt F1-raceuitslagen na de kwalificatie, met een walk-forward backtest tegen baselines."
 readme = "README.md"
 authors = [
     { name = "WiebeM-2468137", email = "wiebe.mermans@student.uhasselt.be" }
