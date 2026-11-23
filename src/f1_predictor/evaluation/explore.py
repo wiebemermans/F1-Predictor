@@ -5,7 +5,12 @@ from typing import TypedDict
 
 import pandas as pd
 
-from f1_predictor.paths import OUTPUT_DIR, RAW_DIR
+from f1_predictor.paths import OUTPUT_DIR, RAW_DIR, ROOT
+
+# Minimum aantal races van een coureur op een circuit voor de bias-tabel; minder is vooral ruis.
+MIN_DRIVER_CIRCUIT_RACES = 3
+# Minimum aantal races op een circuit voordat het in de rapporttabel verschijnt.
+MIN_CIRCUIT_RACES = 3
 
 
 class QualitySummary(TypedDict):
@@ -37,14 +42,30 @@ def load_all_results(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
 
 
 def _retirement_mask(status: pd.Series) -> pd.Series:
-    status = status.fillna("").astype(str).str.lower()
-    finished_like = status.eq("finished") | status.str.fullmatch(r"\+\d+\s*lap(s)?", na=False)
-    return ~finished_like
+    """True voor uitvallers (DNF) en niet-starters (DNS).
+
+    Jolpica gebruikt twee statusvocabulaires: oudere seizoenen "+1 Lap", "+2 Laps", ...;
+    recentere seizoenen "Lapped". Beide gelden als gefinisht. Diskwalificaties tellen
+    niet als uitval: de auto reed de race uit en het zegt niets over betrouwbaarheid.
+    """
+    status = status.fillna("").astype(str).str.strip().str.lower()
+    finished_like = (
+        status.eq("finished")
+        | status.eq("lapped")
+        | status.str.fullmatch(r"\+\d+\s*laps?", na=False)
+    )
+    return ~(finished_like | status.eq("disqualified"))
+
+
+def _start_position(df: pd.DataFrame) -> pd.Series:
+    """Startpositie waarbij een pitlane-start (`grid = 0`) achteraan het veld telt."""
+    race_size = df.groupby(["season", "round"])["driver_id"].transform("size")
+    return df["grid"].where(df["grid"] > 0, race_size)
 
 
 def build_quality_summary(df: pd.DataFrame) -> QualitySummary:
     """Belangrijkste kwaliteits- en analysecijfers voor fase 4."""
-    grid_finish_spearman = df["grid"].corr(df["finish_position"], method="spearman")
+    grid_finish_spearman = _start_position(df).corr(df["finish_position"], method="spearman")
     race_size = df.groupby(["season", "round"])["driver_id"].transform("size")
     numeric_columns = ["grid", "finish_position", "points", "sprint_points", "laps"]
     summary: QualitySummary = {
@@ -80,15 +101,22 @@ def build_quality_summary(df: pd.DataFrame) -> QualitySummary:
     return summary
 
 
-def build_retirement_stats(df: pd.DataFrame) -> pd.DataFrame:
-    """Retirement-percentage per team."""
-    df = df.copy()
-    df["retired"] = _retirement_mask(df["status"])
-    stats = df.groupby("constructor_id")["retired"].mean().reset_index()
-    stats.columns = ["constructor_id", "retirement_rate"]
-    stats = stats.sort_values("retirement_rate", ascending=False).reset_index(drop=True)
+def _retirement_rate_by(df: pd.DataFrame, column: str) -> pd.DataFrame:
+    grouped = df.assign(retired=_retirement_mask(df["status"])).groupby(column)["retired"]
+    stats = grouped.agg(retirement_rate="mean", starts="size").reset_index()
     stats["retirement_rate"] = (stats["retirement_rate"] * 100).round(2)
     return stats
+
+
+def build_retirement_stats(df: pd.DataFrame) -> pd.DataFrame:
+    """Uitvalpercentage (DNF + DNS) per team, hoogste eerst."""
+    stats = _retirement_rate_by(df, "constructor_id")
+    return stats.sort_values("retirement_rate", ascending=False).reset_index(drop=True)
+
+
+def build_retirement_by_season(df: pd.DataFrame) -> pd.DataFrame:
+    """Uitvalpercentage (DNF + DNS) per seizoen, chronologisch."""
+    return _retirement_rate_by(df, "season").sort_values("season").reset_index(drop=True)
 
 
 def build_team_strength_by_season(df: pd.DataFrame) -> pd.DataFrame:
@@ -103,18 +131,48 @@ def build_team_strength_by_season(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_circuit_effects(df: pd.DataFrame) -> pd.DataFrame:
-    """Circuitgemiddelden, gerangschikt van snelste naar langzaamste gemiddelde finish."""
-    series = df.groupby("circuit_id")["finish_position"].mean().reset_index()
-    series.columns = ["circuit_id", "avg_finish_position"]
-    series = series.sort_values("avg_finish_position").reset_index(drop=True)
-    series["races_at_circuit"] = (
-        df.groupby("circuit_id").size().reindex(series["circuit_id"]).to_numpy()
+    """Hoe voorspelbaar elk circuit is, van chaotisch naar voorspelbaar.
+
+    De gemiddelde finishpositie per circuit zegt niets (bij 20 deelnemers altijd 10,5).
+    Daarom per circuit: de gemiddelde Spearman-correlatie per race tussen startpositie
+    (pitlane achteraan) en finish, de gemiddelde absolute positiewinst/-verlies en het
+    uitvalpercentage.
+    """
+    df = df.assign(
+        _start=_start_position(df),
+        _retired=_retirement_mask(df["status"]),
     )
-    return series
+    df["_abs_change"] = (df["_start"] - df["finish_position"]).abs()
+    per_race = (
+        df.groupby(["circuit_id", "season", "round"])
+        .apply(
+            lambda race: race["_start"].corr(race["finish_position"], method="spearman"),
+            include_groups=False,
+        )
+        .rename("start_finish_spearman")
+        .reset_index()
+    )
+    effects = per_race.groupby("circuit_id").agg(
+        races=("start_finish_spearman", "size"),
+        start_finish_spearman=("start_finish_spearman", "mean"),
+    )
+    effects["mean_abs_position_change"] = df.groupby("circuit_id")["_abs_change"].mean()
+    effects["retirement_rate"] = (df.groupby("circuit_id")["_retired"].mean() * 100).round(2)
+    return (
+        effects.reset_index()
+        .sort_values(["start_finish_spearman", "circuit_id"])
+        .reset_index(drop=True)
+    )
 
 
-def build_driver_circuit_bias(df: pd.DataFrame) -> pd.DataFrame:
-    """Laat zien of een coureur op bepaalde circuits structureel beter of slechter presteert."""
+def build_driver_circuit_bias(
+    df: pd.DataFrame, min_races: int = MIN_DRIVER_CIRCUIT_RACES
+) -> pd.DataFrame:
+    """Laat zien of een coureur op bepaalde circuits structureel beter of slechter presteert.
+
+    Alleen combinaties met minstens `min_races` races; het verschil is ruw (zonder
+    shrinkage of correctie voor teamsterkte) en is dus een verkenning, geen feature.
+    """
     all_races = df.groupby(["driver_id", "circuit_id"]).size().reset_index(name="races")
     driver_mean = df.groupby("driver_id")["finish_position"].mean().reset_index()
     driver_mean.columns = ["driver_id", "driver_mean_finish"]
@@ -123,68 +181,63 @@ def build_driver_circuit_bias(df: pd.DataFrame) -> pd.DataFrame:
     bias = circuit_mean.merge(driver_mean, on="driver_id", how="left")
     bias = bias.merge(all_races, on=["driver_id", "circuit_id"], how="left")
     bias["delta_vs_driver_mean"] = bias["circuit_mean_finish"] - bias["driver_mean_finish"]
-    bias = bias[bias["races"] >= 2].sort_values("delta_vs_driver_mean").reset_index(drop=True)
-    return bias
+    bias = bias[bias["races"] >= min_races]
+    return bias.sort_values("delta_vs_driver_mean").reset_index(drop=True)
+
+
+def _table(header: str, rows: list[str]) -> str:
+    return header + "\n" + "\n".join(rows)
 
 
 def build_report(
     quality: QualitySummary,
     retirement: pd.DataFrame,
+    retirement_by_season: pd.DataFrame,
     team_strength: pd.DataFrame,
     circuit_effects: pd.DataFrame,
     driver_bias: pd.DataFrame,
 ) -> str:
     """Markdown-rapport met de belangrijkste observaties uit fase 4."""
-    top_retirement = retirement.head(5).copy()
-    top_retirement["retirement_rate"] = top_retirement["retirement_rate"].map(
-        lambda value: f"{value:.2f}%"
-    )
     team_top = (
         team_strength.sort_values(["season", "avg_finish_position"])
         .groupby("season", as_index=False)
         .head(1)
         .sort_values("season")
-        .head(3)
     )
-    best_circuit = circuit_effects.head(5)[["circuit_id", "avg_finish_position"]].copy()
-    best_driver = driver_bias.nsmallest(5, "delta_vs_driver_mean")[
-        ["driver_id", "circuit_id", "delta_vs_driver_mean"]
-    ].copy()
-    worst_driver = driver_bias.nlargest(5, "delta_vs_driver_mean")[
-        ["driver_id", "circuit_id", "delta_vs_driver_mean"]
-    ].copy()
+    circuits = circuit_effects[circuit_effects["races"] >= MIN_CIRCUIT_RACES]
+    chaotic = circuits.head(5)
+    predictable = circuits.tail(5).iloc[::-1]
+    best_driver = driver_bias.nsmallest(5, "delta_vs_driver_mean")
+    worst_driver = driver_bias.nlargest(5, "delta_vs_driver_mean")
+    team_rate_min = retirement["retirement_rate"].min()
+    team_rate_max = retirement["retirement_rate"].max()
+    season_rate_min = retirement_by_season["retirement_rate"].min()
+    season_rate_max = retirement_by_season["retirement_rate"].max()
 
-    retirement_rows = "\n".join(
-        f"| {row['constructor_id']} | {row['retirement_rate']} |"
-        for _, row in top_retirement.iterrows()
+    def circuit_row(row: pd.Series) -> str:
+        return (
+            f"| {row['circuit_id']} | {int(row['races'])} | {row['start_finish_spearman']:.2f} "
+            f"| {row['mean_abs_position_change']:.2f} | {row['retirement_rate']:.2f}% |"
+        )
+
+    def bias_row(row: pd.Series) -> str:
+        return (
+            f"| {row['driver_id']} | {row['circuit_id']} | {int(row['races'])} "
+            f"| {row['delta_vs_driver_mean']:.2f} |"
+        )
+
+    circuit_header = (
+        "| Circuit | Races | Spearman start-finish | Gem. abs. positiewijziging | Uitval |\n"
+        "|---|---:|---:|---:|---:|"
     )
-    team_rows = "\n".join(
-        f"| {int(row['season'])} | {row['constructor_id']} | {row['avg_finish_position']:.2f} |"
-        for _, row in team_top.iterrows()
-    )
-    circuit_rows = "\n".join(
-        f"| {row['circuit_id']} | {row['avg_finish_position']:.2f} |"
-        for _, row in best_circuit.iterrows()
-    )
-    positive_bias_rows = "\n".join(
-        f"| {row['driver_id']} | {row['circuit_id']} | {row['delta_vs_driver_mean']:.2f} |"
-        for _, row in best_driver.iterrows()
-    )
-    negative_bias_rows = "\n".join(
-        f"| {row['driver_id']} | {row['circuit_id']} | {row['delta_vs_driver_mean']:.2f} |"
-        for _, row in worst_driver.iterrows()
-    )
-    range_rows = "\n".join(
-        f"| {column} | {minimum:g} | {maximum:g} |"
-        for column, (minimum, maximum) in quality["numeric_ranges"].items()
-    )
-    invalid_rows = "\n".join(
-        f"| {check.replace('_', ' ')} | {count} |"
-        for check, count in quality["invalid_domain_values"].items()
+    bias_header = (
+        "| Coureur | Circuit | Races | Verschil t.o.v. eigen gemiddelde |\n|---|---|---:|---:|"
     )
 
     return (
         "# Fase 4: Data verkennen\n\n"
+        "Dit rapport wordt gegenereerd door `uv run python -m "
+        "f1_predictor.evaluation.explore`.\n\n"
         "## Datasetkwaliteit\n\n"
         f"- Aantal rijen: {quality['rows']}\n"
         f"- Aantal seizoenen: {quality['seasons']}\n"
@@ -192,119 +245,162 @@ def build_report(
         "- Duplicates op (`season`, `round`, `driver_id`): "
         f"{quality['duplicate_driver_race_rows']}\n"
         f"- Ontbrekende waarden: {quality['missing_values']}\n"
-        "- Spearman correlatie tussen grid en finishpositie: "
+        "- Spearman correlatie tussen startpositie en finishpositie: "
         f"{quality['grid_finish_spearman']:.4f}\n"
         f"- Gemiddelde finishpositie: {quality['avg_finish_position']:.2f}\n"
         f"- Mediaan finishpositie: {quality['median_finish_position']:.2f}\n\n"
+        "## Methode en definities\n\n"
+        "- **Startpositie:** `grid`, waarbij een pitlane-start (`grid = 0`) als laatste "
+        "startplaats van het veld telt. De ruwe data blijft ongewijzigd; deze vertaling "
+        "gebeurt alleen in de analyse.\n"
+        "- **Uitval:** elke status behalve gefinisht en gediskwalificeerd, dus DNF en "
+        "niet-starters (DNS). Gefinisht is `Finished`, `+N Lap(s)` (oudere seizoenen) of "
+        "`Lapped` (recentere seizoenen). Diskwalificaties tellen niet als uitval. "
+        "De status is gebruikt in plaats van `position_text`, omdat uitvallers die ver "
+        "genoeg kwamen toch een numerieke klassering krijgen.\n"
+        "- **Circuit-effecten:** de gemiddelde finishpositie per circuit is geen bruikbare "
+        "maat (bij 20 deelnemers altijd 10,5). Daarom wordt per race de Spearman-correlatie "
+        "tussen startpositie en finish berekend en per circuit gemiddeld; lager betekent een "
+        "minder voorspelbaar circuit.\n"
+        f"- **Driver-circuit bias:** alleen combinaties met minstens "
+        f"{MIN_DRIVER_CIRCUIT_RACES} races; ruw verschil zonder correctie voor teamsterkte.\n\n"
         "## Bereiken en domeincontrole\n\n"
         "Numerieke bereiken zijn gecontroleerd op onmogelijke waarden. Een generieke "
         "IQR-regel is hier niet toegepast: startplaatsen, rondes, punten en rondetotalen "
         "zijn discrete waarden die per seizoen en racecontext verschillen. `grid = 0` "
         "en `laps = 0` zijn geldige pitlane-starten/niet gestarte of vroeg uitgevallen "
         "deelnemers en worden niet als fout aangemerkt.\n\n"
-        "| Kolom | Minimum | Maximum |\n"
-        "|---|---:|---:|\n"
-        f"{range_rows}\n\n"
-        "| Domeincontrole | Ongeldige rijen |\n"
-        "|---|---:|\n"
-        f"{invalid_rows}\n\n"
+        + _table(
+            "| Kolom | Minimum | Maximum |\n|---|---:|---:|",
+            [
+                f"| {column} | {minimum:g} | {maximum:g} |"
+                for column, (minimum, maximum) in quality["numeric_ranges"].items()
+            ],
+        )
+        + "\n\n"
+        + _table(
+            "| Domeincontrole | Ongeldige rijen |\n|---|---:|",
+            [
+                f"| {check.replace('_', ' ')} | {count} |"
+                for check, count in quality["invalid_domain_values"].items()
+            ],
+        )
+        + "\n\n"
         "## Belangrijkste observaties\n\n"
-        "1. De gridpositie is een sterke maar niet perfecte voorspeller van de "
-        "eindklassering. De Spearman-correlatie van "
-        f"{quality['grid_finish_spearman']:.4f} laat zien dat startpositie veel "
-        "verklaart, maar dat race-ruis en uitvallers nog steeds belangrijk "
-        "zijn.\n"
-        "2. Er zijn in de ruwe dataset vrijwel geen duplicaten en slechts een "
-        "klein aantal ontbrekende `quali_position`-waarden "
-        f"({quality['missing_values'].get('quali_position', 0)}). Dat betekent "
-        "dat het datamodel consistent is en geen grote data-quality-issues "
-        "vertoont.\n"
-        "3. De uitvalpercentages verschillen sterk tussen teams, wat een "
-        "aanwijzing is dat team- en auto-kwaliteit een duidelijke invloed hebben "
-        "op de kans op een DNF.\n"
-        "4. Er zijn duidelijke circuitverschillen in gemiddelde finishpositie, "
-        "maar de range is beperkt. Dat suggereert dat circuitkarakteristieken "
-        "relevant zijn, maar niet zo dominant dat ze alle andere signalen "
-        "volledig overschaduwen.\n"
-        "5. Verschillende coureurs presteren structureel beter of slechter op "
-        "bepaalde circuits. Dat is interessant voor de feature-engineering in "
-        "fase 6, maar we moeten het met voldoende data-per-circuit "
-        "controleren om overfitting te voorkomen.\n\n"
-        "## Uitvalpercentage per team\n\n"
-        "| Team | Uitvalpercentage |\n"
-        "|---|---:|\n"
-        f"{retirement_rows}\n\n"
-        "## Teamsterkte per seizoen\n\n"
-        "De tabel hieronder toont de gemiddelde bijdrage van elk team per jaar. "
-        "Lagere gemiddelden betekenen gemiddeld beter presteren.\n\n"
-        "| Seizoen | Team | Gemiddelde teamfinish |\n"
-        "|---|---|---:|\n"
-        f"{team_rows}\n\n"
-        "## Circuit-effecten\n\n"
-        "| Circuit | Gemiddelde finishpositie |\n"
-        "|---|---:|\n"
-        f"{circuit_rows}\n\n"
-        "## Driver-circuit bias\n\n"
-        "De onderstaande selectie toont de sterkste positieve en negatieve "
-        "afwijkingen ten opzichte van de eigen gemiddelde finish van de coureur."
-        "\n\n"
+        "1. De startpositie is een sterke maar niet perfecte voorspeller van de "
+        f"eindklassering (Spearman {quality['grid_finish_spearman']:.4f}). Race-ruis en "
+        "uitvallers blijven belangrijk.\n"
+        "2. Er zijn geen duplicaten en slechts "
+        f"{quality['missing_values'].get('quali_position', 0)} ontbrekende "
+        "`quali_position`-waarden; de dataset is consistent.\n"
+        f"3. Het uitvalpercentage per seizoen ligt tussen {season_rate_min:.1f}% en "
+        f"{season_rate_max:.1f}%; per team tussen {team_rate_min:.1f}% en "
+        f"{team_rate_max:.1f}%. Teams met weinig starts (nieuwe teams, lopend seizoen) "
+        "hebben onbetrouwbare percentages; kijk daarom ook naar het aantal starts.\n"
+        "4. Circuits verschillen in voorspelbaarheid: de gemiddelde Spearman-correlatie "
+        f"tussen start en finish loopt van {circuits['start_finish_spearman'].min():.2f} tot "
+        f"{circuits['start_finish_spearman'].max():.2f} (circuits met minstens "
+        f"{MIN_CIRCUIT_RACES} races). Op chaotische circuits weegt de startpositie minder.\n"
+        "5. Sommige coureurs presteren op bepaalde circuits beter of slechter dan hun eigen "
+        "gemiddelde, maar het aantal races per combinatie is klein en teamsterkte is niet "
+        "gecorrigeerd. Een circuit-feature in fase 6 heeft shrinkage nodig.\n\n"
+        "## Uitvalpercentage per seizoen\n\n"
+        + _table(
+            "| Seizoen | Starts | Uitvalpercentage |\n|---|---:|---:|",
+            [
+                f"| {int(row['season'])} | {int(row['starts'])} | {row['retirement_rate']:.2f}% |"
+                for _, row in retirement_by_season.iterrows()
+            ],
+        )
+        + "\n\n## Uitvalpercentage per team (hoogste 5)\n\n"
+        + _table(
+            "| Team | Starts | Uitvalpercentage |\n|---|---:|---:|",
+            [
+                f"| {row['constructor_id']} | {int(row['starts'])} "
+                f"| {row['retirement_rate']:.2f}% |"
+                for _, row in retirement.head(5).iterrows()
+            ],
+        )
+        + "\n\n## Sterkste team per seizoen\n\n"
+        "Het team met de laagste gemiddelde finishpositie per seizoen; lager is beter. "
+        "Alle teams staan in `output/phase4_team_strength_by_season.csv`.\n\n"
+        + _table(
+            "| Seizoen | Team | Gemiddelde teamfinish |\n|---|---|---:|",
+            [
+                f"| {int(row['season'])} | {row['constructor_id']} "
+                f"| {row['avg_finish_position']:.2f} |"
+                for _, row in team_top.iterrows()
+            ],
+        )
+        + "\n\n## Circuit-effecten\n\n"
+        f"Circuits met minstens {MIN_CIRCUIT_RACES} races. Alle circuits staan in "
+        "`output/phase4_circuit_effects.csv`.\n\n"
+        "### Minst voorspelbaar\n\n"
+        + _table(circuit_header, [circuit_row(row) for _, row in chaotic.iterrows()])
+        + "\n\n### Meest voorspelbaar\n\n"
+        + _table(circuit_header, [circuit_row(row) for _, row in predictable.iterrows()])
+        + "\n\n## Driver-circuit bias\n\n"
+        "De sterkste afwijkingen ten opzichte van de eigen gemiddelde finish van de coureur.\n\n"
         "### Positieve bias (beter dan normaal)\n\n"
-        "| Coureur | Circuit | Verschil ten opzichte van eigen gemiddelde |\n"
-        "|---|---|---:|\n"
-        f"{positive_bias_rows}\n\n"
-        "### Negatieve bias (slechter dan normaal)\n\n"
-        "| Coureur | Circuit | Verschil ten opzichte van eigen gemiddelde |\n"
-        "|---|---|---:|\n"
-        f"{negative_bias_rows}\n\n"
-        "## Conclusie\n\n"
-        "Fase 4 laat zien dat de dataset goed genoeg is om door te gaan naar "
-        "fase 5 en fase 6. De startpositie is een sterke baseline, het "
-        "team-/circuit-signaal is aanwezig, en er is voldoende data voor "
-        "feature engineering zonder leakage. De volgende stap is het "
-        "definiëren van baselines en backtest-metrieken, zodat het model "
-        "eerlijk kan worden vergeleken met eenvoudige, tijdgeordende "
-        "benchmarks.\n"
+        + _table(bias_header, [bias_row(row) for _, row in best_driver.iterrows()])
+        + "\n\n### Negatieve bias (slechter dan normaal)\n\n"
+        + _table(bias_header, [bias_row(row) for _, row in worst_driver.iterrows()])
+        + "\n\n## Conclusie\n\n"
+        "De dataset is goed genoeg voor fase 5 en fase 6. De startpositie is de sterkste "
+        "enkele voorspeller; teamsterkte, uitvalrisico en circuitkarakter zijn aanvullende "
+        "signalen. Uitval- en circuitfeatures moeten rekening houden met kleine aantallen "
+        "en met beide statusvocabulaires van Jolpica.\n"
     )
 
 
-def write_phase4_outputs(df: pd.DataFrame) -> dict[str, Path]:
+PHASE4_FILE_NAMES = {
+    "summary": "phase4_quality_summary.csv",
+    "retirement": "phase4_retirement_by_team.csv",
+    "retirement_by_season": "phase4_retirement_by_season.csv",
+    "team_strength": "phase4_team_strength_by_season.csv",
+    "circuit_effects": "phase4_circuit_effects.csv",
+    "driver_bias": "phase4_driver_circuit_bias.csv",
+}
+
+
+def write_phase4_outputs(
+    df: pd.DataFrame,
+    output_dir: Path = OUTPUT_DIR,
+    report_path: Path = ROOT / "docs" / "phase4_exploration.md",
+) -> dict[str, Path]:
     """Schrijf analyse-output bestanden voor fase 4."""
-    output_dir = OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
     quality = build_quality_summary(df)
     retirement = build_retirement_stats(df)
+    retirement_by_season = build_retirement_by_season(df)
     team_strength = build_team_strength_by_season(df)
     circuit_effects = build_circuit_effects(df)
     driver_bias = build_driver_circuit_bias(df)
 
-    summary_path = output_dir / "phase4_quality_summary.csv"
-    retirement_path = output_dir / "phase4_retirement_by_team.csv"
-    team_path = output_dir / "phase4_team_strength_by_season.csv"
-    circuit_path = output_dir / "phase4_circuit_effects.csv"
-    driver_bias_path = output_dir / "phase4_driver_circuit_bias.csv"
+    tables = {
+        "summary": pd.DataFrame([quality]),
+        "retirement": retirement,
+        "retirement_by_season": retirement_by_season,
+        "team_strength": team_strength,
+        "circuit_effects": circuit_effects,
+        "driver_bias": driver_bias,
+    }
+    outputs: dict[str, Path] = {}
+    for name, table in tables.items():
+        path = output_dir / PHASE4_FILE_NAMES[name]
+        table.to_csv(path, index=False)
+        outputs[name] = path
 
-    pd.DataFrame([quality]).to_csv(summary_path, index=False)
-    retirement.to_csv(retirement_path, index=False)
-    team_strength.to_csv(team_path, index=False)
-    circuit_effects.to_csv(circuit_path, index=False)
-    driver_bias.to_csv(driver_bias_path, index=False)
-
-    report_path = Path("docs") / "phase4_exploration.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
-        build_report(quality, retirement, team_strength, circuit_effects, driver_bias),
+        build_report(
+            quality, retirement, retirement_by_season, team_strength, circuit_effects, driver_bias
+        ),
         encoding="utf-8",
     )
-
-    return {
-        "summary": summary_path,
-        "retirement": retirement_path,
-        "team_strength": team_path,
-        "circuit_effects": circuit_path,
-        "driver_bias": driver_bias_path,
-        "report": report_path,
-    }
+    outputs["report"] = report_path
+    return outputs
 
 
 def main() -> None:

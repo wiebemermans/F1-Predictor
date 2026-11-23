@@ -144,7 +144,7 @@ f1-predictor/
 - [x] Ontbrekende waarden, duplicaten en domein-afwijkingen controleren; geldige uitzonderingen zoals `grid = 0` en `laps = 0` niet als fouten tellen
 - [x] Spearman-correlatie tussen gridpositie en finishpositie over alle races
 - [x] Uitvalpercentage per team berekenen en rapporteren
-- [ ] Uitvalpercentages ook per circuit en seizoen vergelijken
+- [x] Uitvalpercentages ook per circuit en seizoen vergelijken
 - [x] Circuit-effecten: zijn sommige coureurs structureel beter op bepaalde banen?
 - [x] Teamsterkte per seizoen berekenen en rapporteren (gemiddelde finish per team per jaar)
 - [x] Bevindingen noteren in [`docs/phase4_exploration.md`](docs/phase4_exploration.md)
