@@ -5,6 +5,7 @@ import pytest
 from typer.testing import CliRunner
 
 from f1_predictor import cli
+from f1_predictor.evaluation.backtest import feature_experiments, run_feature_backtest
 from f1_predictor.features.build import (
     FEATURE_GROUPS,
     FeatureConfig,
@@ -393,3 +394,32 @@ def test_cli_features_reports_missing_raw_data(monkeypatch):
 
     assert result.exit_code == 1
     assert "f1 fetch" in result.output
+
+
+# --- Meetinstrument: feature-backtest ---
+
+
+def test_feature_experiments_add_groups_cumulatively():
+    experiments = feature_experiments()
+
+    assert list(experiments) == [f"ridge_upto_{group}" for group in FEATURE_GROUPS]
+    first, *_, last = experiments.values()
+    assert first().feature_columns == ["start_position", "start_quali_missing"]
+    assert last().feature_columns == feature_columns()
+
+
+def test_run_feature_backtest_scores_all_models_on_same_races(tmp_path):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    _sample_data().to_parquet(raw_dir / "results_2023.parquet", index=False)
+    output_path = tmp_path / "output" / "backtest_features.csv"
+
+    results = run_feature_backtest(raw_dir, output_path, min_train_races=2)
+
+    saved = pd.read_csv(output_path)
+    assert len(saved) == len(results) == 4 * (2 + len(FEATURE_GROUPS))
+    races_per_model = saved.groupby("model")[["season", "round"]].apply(
+        lambda frame: tuple(map(tuple, frame.to_numpy()))
+    )
+    assert races_per_model.nunique() == 1
+    assert {"qualifying_position", "championship_points"}.issubset(saved["model"])
