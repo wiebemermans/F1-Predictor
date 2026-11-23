@@ -17,6 +17,7 @@ Dit project is grotendeels ontwikkeld met hulp van een large language model (LLM
 - [Dataschema en leakagegrenzen](docs/data_schema.md)
 - [Fase 4: data-exploratie](docs/phase4_exploration.md)
 - [Fase 5: baselines en backtestmethode](docs/phase5_baselines.md)
+- [Fase 6: features, leakage-tests en experimentenlogboek](docs/features.md)
 - [Volledig stappenplan](F1-voorspelmodel-stappenplan.md)
 
 ## Baseline-backtest
@@ -30,5 +31,18 @@ uv run python -c "from f1_predictor.evaluation.backtest import run_baseline_back
 De backtest gebruikt alleen eerdere races als trainingshistorie en slaat scores per race op in
 `output/backtest_baselines.csv`. De eerste 20 races worden gebruikt als minimale trainingshistorie
 en krijgen zelf geen score.
+
+## Features
+
+Bouw de featuretabel (`data/processed/features.parquet`) en meet de featuregroepen in dezelfde
+walk-forward-backtest:
+
+```powershell
+uv run f1 features
+uv run python -c "from f1_predictor.evaluation.backtest import run_feature_backtest; run_feature_backtest()"
+```
+
+De scores per experiment staan in `output/backtest_features.csv`; de conclusies staan in het
+[experimentenlogboek](docs/features.md#experimentenlogboek).
 
 > 🚧 Work in progress

@@ -5,6 +5,7 @@ from typing import TypedDict
 
 import pandas as pd
 
+from f1_predictor.features.groups import retirement_mask
 from f1_predictor.paths import OUTPUT_DIR, RAW_DIR, ROOT
 
 # Minimum aantal races van een coureur op een circuit voor de bias-tabel; minder is vooral ruis.
@@ -39,22 +40,6 @@ def load_all_results(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
     df = pd.concat(frames, ignore_index=True)
     df = df.sort_values(["season", "round", "finish_position"]).reset_index(drop=True)
     return df
-
-
-def _retirement_mask(status: pd.Series) -> pd.Series:
-    """True voor uitvallers (DNF) en niet-starters (DNS).
-
-    Jolpica gebruikt twee statusvocabulaires: oudere seizoenen "+1 Lap", "+2 Laps", ...;
-    recentere seizoenen "Lapped". Beide gelden als gefinisht. Diskwalificaties tellen
-    niet als uitval: de auto reed de race uit en het zegt niets over betrouwbaarheid.
-    """
-    status = status.fillna("").astype(str).str.strip().str.lower()
-    finished_like = (
-        status.eq("finished")
-        | status.eq("lapped")
-        | status.str.fullmatch(r"\+\d+\s*laps?", na=False)
-    )
-    return ~(finished_like | status.eq("disqualified"))
 
 
 def _start_position(df: pd.DataFrame) -> pd.Series:
@@ -102,7 +87,7 @@ def build_quality_summary(df: pd.DataFrame) -> QualitySummary:
 
 
 def _retirement_rate_by(df: pd.DataFrame, column: str) -> pd.DataFrame:
-    grouped = df.assign(retired=_retirement_mask(df["status"])).groupby(column)["retired"]
+    grouped = df.assign(retired=retirement_mask(df["status"])).groupby(column)["retired"]
     stats = grouped.agg(retirement_rate="mean", starts="size").reset_index()
     stats["retirement_rate"] = (stats["retirement_rate"] * 100).round(2)
     return stats
@@ -140,7 +125,7 @@ def build_circuit_effects(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.assign(
         _start=_start_position(df),
-        _retired=_retirement_mask(df["status"]),
+        _retired=retirement_mask(df["status"]),
     )
     df["_abs_change"] = (df["_start"] - df["finish_position"]).abs()
     per_race = (

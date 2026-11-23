@@ -7,6 +7,7 @@ from f1_predictor.models.baselines import (
     ChampionshipPointsBaseline,
     QualifyingPositionBaseline,
 )
+from f1_predictor.models.linear import RidgeFeaturePredictor
 
 
 def _race(season: int, round_: int, positions: list[int]) -> pd.DataFrame:
@@ -211,3 +212,41 @@ def test_run_baseline_backtest_writes_csv(tmp_path):
     saved = pd.read_csv(output_path)
     assert saved["model"].tolist() == ["qualifying_position", "championship_points"]
     assert saved["round"].tolist() == [2, 2]
+
+
+def test_ridge_predictor_ranks_lowest_predicted_finish_first():
+    train = pd.DataFrame(
+        {"x": [1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0], "finish_position": [1, 2, 3, 4] * 2}
+    )
+    race = pd.DataFrame({"driver_id": ["a", "b", "c"], "x": [3.0, 1.0, 2.0]}, index=[10, 11, 12])
+
+    predicted = RidgeFeaturePredictor(["x"]).fit(train).predict(race)
+
+    assert predicted.index.equals(race.index)
+    assert predicted.tolist() == [3, 1, 2]
+
+
+def test_ridge_predictor_imputes_missing_features_from_training_data():
+    train = pd.DataFrame(
+        {
+            "x": [1.0, 2.0, None, 4.0],
+            "empty": [None] * 4,
+            "finish_position": [1, 2, 3, 4],
+        }
+    )
+    race = pd.DataFrame({"driver_id": ["a", "b"], "x": [None, 1.0], "empty": [None, None]})
+
+    predicted = RidgeFeaturePredictor(["x", "empty"]).fit(train).predict(race)
+
+    assert sorted(predicted.tolist()) == [1, 2]
+
+
+def test_ridge_predictor_requires_fit_and_feature_columns():
+    race = pd.DataFrame({"driver_id": ["a"], "x": [1.0]})
+
+    with pytest.raises(RuntimeError, match="fit"):
+        RidgeFeaturePredictor(["x"]).predict(race)
+    with pytest.raises(ValueError, match="featurekolommen"):
+        RidgeFeaturePredictor(["y"]).fit(pd.DataFrame({"x": [1.0], "finish_position": [1]}))
+    with pytest.raises(ValueError, match="minstens één"):
+        RidgeFeaturePredictor([])

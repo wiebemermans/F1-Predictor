@@ -29,4 +29,5 @@ Eén rij per coureur per race. Sleutel: (`season`, `round`, `driver_id`).
 
 ## Bewust niet opgelost in de rauwe data
 Pitlane-starts (grid = 0), diskwalificaties, niet-starters: we bewaren ze ongewijzigd.
-Afhandeling gebeurt in feature engineering (Fase 6).
+Afhandeling gebeurt in feature engineering; zie [features.md](./features.md). De afgeleide
+featuretabel staat in `data/processed/features.parquet` (`uv run f1 features`).

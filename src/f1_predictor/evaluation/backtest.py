@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
 
+from f1_predictor.features.build import FeatureConfig, build_features, feature_columns
 from f1_predictor.models.baselines import (
     ChampionshipPointsBaseline,
     QualifyingPositionBaseline,
     RacePredictor,
 )
+from f1_predictor.models.linear import RidgeFeaturePredictor
 from f1_predictor.paths import OUTPUT_DIR, RAW_DIR
 
 from .metrics import score_race
@@ -101,20 +105,59 @@ def run_backtest(
     return pd.DataFrame.from_records(records, columns=BACKTEST_COLUMNS)
 
 
+def _load_raw_results(data_dir: Path) -> pd.DataFrame:
+    data_files = sorted(data_dir.glob("results_*.parquet"))
+    if not data_files:
+        raise FileNotFoundError(f"Geen results_*.parquet-bestanden gevonden in {data_dir}")
+    return pd.concat((pd.read_parquet(path) for path in data_files), ignore_index=True)
+
+
+def _write_csv(results: pd.DataFrame, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    results.to_csv(temporary_path, index=False)
+    temporary_path.replace(output_path)
+
+
 def run_baseline_backtest(
     data_dir: Path = RAW_DIR,
     output_path: Path = OUTPUT_DIR / "backtest_baselines.csv",
     min_train_races: int = 20,
 ) -> pd.DataFrame:
     """Laad de seizoensparquets, voer beide baselines uit en schrijf race-scores weg."""
-    data_files = sorted(data_dir.glob("results_*.parquet"))
-    if not data_files:
-        raise FileNotFoundError(f"Geen results_*.parquet-bestanden gevonden in {data_dir}")
-    data = pd.concat((pd.read_parquet(path) for path in data_files), ignore_index=True)
+    data = _load_raw_results(data_dir)
     results = run_backtest(data, BASELINE_FACTORIES, min_train_races=min_train_races)
+    _write_csv(results, output_path)
+    return results
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    results.to_csv(temporary_path, index=False)
-    temporary_path.replace(output_path)
+
+def feature_experiments(
+    config: FeatureConfig | None = None,
+) -> dict[str, Callable[[], RacePredictor]]:
+    """Ridge-experimenten waarin de featuregroepen één voor één cumulatief worden toegevoegd."""
+    config = config or FeatureConfig()
+    experiments: dict[str, Callable[[], RacePredictor]] = {}
+    enabled = config.enabled_groups
+    for count, group in enumerate(enabled, start=1):
+        columns = feature_columns(replace(config, groups=tuple(enabled[:count])))
+        experiments[f"ridge_upto_{group}"] = partial(RidgeFeaturePredictor, columns)
+    return experiments
+
+
+def run_feature_backtest(
+    data_dir: Path = RAW_DIR,
+    output_path: Path = OUTPUT_DIR / "backtest_features.csv",
+    min_train_races: int = 20,
+    config: FeatureConfig | None = None,
+) -> pd.DataFrame:
+    """Score de baselines en de cumulatieve feature-experimenten op exact dezelfde races.
+
+    De features worden één keer op alle data gebouwd; dat is lekvrij omdat elke feature van
+    race N alleen eerdere races en de kwalificatie van race N gebruikt (zie de leakage-tests).
+    """
+    config = config or FeatureConfig()
+    data = build_features(_load_raw_results(data_dir), config)
+    predictors = {**BASELINE_FACTORIES, **feature_experiments(config)}
+    results = run_backtest(data, predictors, min_train_races=min_train_races)
+    _write_csv(results, output_path)
     return results

@@ -33,3 +33,16 @@ De kolommen en betekenis staan in [data_schema.md](./data_schema.md). Ruwe
 data wordt bewust niet aangepast om bijvoorbeeld pitlane-starten, niet-starters
 of diskwalificaties te verbergen. Gebruik voor alle afgeleide interpretaties
 de brontabel en de gedocumenteerde regels van de betreffende analyse.
+
+## Featuretabel
+
+Vanuit de seizoensbestanden bouwt `f1 features` één featuretabel voor alle races:
+
+```powershell
+uv run f1 features
+```
+
+De tabel wordt atomisch weggeschreven naar `data/processed/features.parquet` en bevat de ruwe
+kolommen ongewijzigd, plus `race_index` en de featurekolommen. Zonder bestanden in `data/raw/`
+eindigt het commando met exitcode 1. Featuredefinities, configuratie en leakage-tests staan in
+[features.md](./features.md).

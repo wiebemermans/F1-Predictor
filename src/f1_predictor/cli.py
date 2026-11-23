@@ -1,4 +1,4 @@
-"""Command line interface: `f1 fetch`, later ook features/backtest/predict."""
+"""Command line interface: `f1 fetch` en `f1 features`, later ook backtest/predict."""
 
 import logging
 from datetime import date
@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 
 from f1_predictor.data.fetch import fetch_seasons
+from f1_predictor.features.build import write_feature_table
 
 app = typer.Typer(help="F1 predictor", no_args_is_help=True)
 
@@ -34,3 +35,13 @@ def fetch(
     if failed:
         typer.echo(f"Mislukte seizoenen: {failed}", err=True)
         raise typer.Exit(code=1)
+
+
+@app.command()
+def features() -> None:
+    """Bouw de featuretabel uit data/raw/ en sla die op als data/processed/features.parquet."""
+    try:
+        write_feature_table()
+    except FileNotFoundError as error:
+        typer.echo(f"{error}. Haal eerst data op met `f1 fetch`.", err=True)
+        raise typer.Exit(code=1) from error
