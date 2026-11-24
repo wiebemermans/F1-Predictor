@@ -226,3 +226,6 @@ data/*
 # caches
 *.sqlite
 .ipynb_checkpoints/
+
+# getrainde modellen (opnieuw te bouwen met train_final_model)
+output/models/

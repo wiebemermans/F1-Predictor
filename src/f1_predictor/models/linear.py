@@ -1,4 +1,4 @@
-"""Lineaire voorspeller als meetinstrument voor featuregroepen (fase 6)."""
+"""Lineaire voorspeller: meetinstrument voor featuregroepen (fase 6) en eerste model (fase 7)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from .baselines import _rank_by, _validate_drivers
+from .common import check_feature_columns, feature_matrix, finish_target
 
 
 class RidgeFeaturePredictor:
@@ -23,41 +24,37 @@ class RidgeFeaturePredictor:
     """
 
     def __init__(self, feature_columns: Sequence[str], alpha: float = 1.0) -> None:
-        columns = list(feature_columns)
-        if not columns:
-            raise ValueError("Geef minstens één featurekolom op")
-        if len(set(columns)) != len(columns):
-            raise ValueError("Featurekolommen moeten uniek zijn")
-        self.feature_columns = columns
+        self.feature_columns = check_feature_columns(feature_columns)
         self.alpha = alpha
         self._pipeline: Pipeline | None = None
 
-    def _features(self, data: pd.DataFrame, label: str) -> pd.DataFrame:
-        missing = set(self.feature_columns).difference(data.columns)
-        if missing:
-            raise ValueError(f"{label} mist featurekolommen: {sorted(missing)}")
-        return data[self.feature_columns].astype("float64")
-
     def fit(self, train: pd.DataFrame) -> Self:
-        if "finish_position" not in train:
-            raise ValueError("Trainingsdata mist vereiste kolom: finish_position")
-        if train.empty:
-            raise ValueError("Kan niet trainen op lege data")
-        target = pd.to_numeric(train["finish_position"], errors="raise")
-        if target.isna().any():
-            raise ValueError("finish_position moet in trainingsdata volledig zijn")
+        target = finish_target(train)
         self._pipeline = make_pipeline(
             SimpleImputer(strategy="median", keep_empty_features=True),
             StandardScaler(),
             Ridge(alpha=self.alpha),
-        ).fit(self._features(train, "Trainingsdata"), target)
+        ).fit(feature_matrix(train, self.feature_columns, "Trainingsdata"), target)
         return self
+
+    def _fitted_pipeline(self) -> Pipeline:
+        if self._pipeline is None:
+            raise RuntimeError("Roep fit aan vóór predict")
+        return self._pipeline
 
     def predict(self, race: pd.DataFrame) -> pd.Series:
         _validate_drivers(race)
-        if self._pipeline is None:
-            raise RuntimeError("Roep fit aan vóór predict")
-        predicted_finish = self._pipeline.predict(self._features(race, "Race"))
+        pipeline = self._fitted_pipeline()
+        predicted_finish = pipeline.predict(feature_matrix(race, self.feature_columns, "Race"))
         return _rank_by(
             race.assign(_predicted_finish=predicted_finish), ["_predicted_finish", "driver_id"]
         )
+
+    def feature_importance(self, data: pd.DataFrame | None = None) -> pd.DataFrame:
+        """Gestandaardiseerde coëfficiënten (voorspelde finish per standaardafwijking).
+
+        Positief betekent dat een hogere featurewaarde een slechtere (hogere) finish voorspelt.
+        `data` wordt niet gebruikt; de parameter bestaat voor dezelfde aanroep als bij XGBoost.
+        """
+        coefficients = self._fitted_pipeline()[-1].coef_
+        return pd.DataFrame({"feature": self.feature_columns, "coefficient": coefficients})

@@ -68,14 +68,15 @@ aangeroepen met een DataFrame en predictor factories.
 
 ## Resultaten van de huidige run
 
-Op de aanwezige 13 seizoenen (2014–2026) staan 269 races. Na de eerste
-twintig trainingsraces zijn 249 races gescoord voor elk van de twee baselines
-(498 rijen totaal); alle scorevelden zijn gevuld.
+Op de aanwezige 13 seizoenen (2014 tot en met ronde 21 van 2026, run van
+2026-11-24) staan 273 races. Na de eerste twintig trainingsraces zijn 253 races
+gescoord voor elk van de twee baselines (506 rijen totaal); alle scorevelden
+zijn gevuld.
 
 | Baseline | MAE (lager beter) | Spearman (hoger beter) | Winnaar juist | Podiumoverlap | Top-10-overlap |
 |---|---:|---:|---:|---:|---:|
-| Kwalificatiepositie | 3.514 | 0.635 | 56.2% | 2.036 | 7.651 |
-| Kampioenschapspunten | 4.018 | 0.558 | 41.4% | 1.771 | 7.241 |
+| Kwalificatiepositie | 3.517 | 0.637 | 56.1% | 2.024 | 7.648 |
+| Kampioenschapspunten | 4.006 | 0.561 | 41.1% | 1.763 | 7.265 |
 
 Dit zijn geaggregeerde historische scores, geen garantie voor toekomstige
 races of onafhankelijk gehouden testdata. Ze vormen de reproduceerbare
