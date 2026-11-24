@@ -12,6 +12,8 @@ the Jolpica-F1 API (Ergast-compatible). Personal hobby project, built phase by p
 - Data columns and which ones are pre-race vs. labels: `docs/data_schema.md`.
 - Baseline and backtest rules (prediction moment, tie-breaks, metrics): `docs/phase5_baselines.md`.
 - Feature definitions, leakage tests and the experiment log: `docs/features.md`.
+- Model variants, tuning protocol (validation 2015–2021, holdout 2022+) and results:
+  `docs/model.md`.
 
 ## Language
 
@@ -30,6 +32,9 @@ uv run f1 features                        # feature table -> data/processed/feat
 uv run python -m f1_predictor.evaluation.explore   # phase 4 report -> output/ + docs/phase4_exploration.md
 uv run python -c "from f1_predictor.evaluation.backtest import run_baseline_backtest; run_baseline_backtest()"
 uv run python -c "from f1_predictor.evaluation.backtest import run_feature_backtest; run_feature_backtest()"
+uv run python -c "from f1_predictor.evaluation.model_selection import run_model_tuning; run_model_tuning()"     # ~45 min
+uv run python -c "from f1_predictor.evaluation.model_selection import run_model_backtest; run_model_backtest()"
+uv run python -c "from f1_predictor.models.train import train_final_model; train_final_model()"
 ```
 
 Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
@@ -40,11 +45,17 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
   rows), `fetch.py` (per-season table, atomic parquet write).
 - `src/f1_predictor/models/baselines.py` – `RacePredictor` protocol: `fit(train_df) -> self`,
   `predict(race_df) -> pd.Series` of unique ranks 1..n with the same index as `race_df`.
-  Every future model must implement this interface. `models/linear.py` – `RidgeFeaturePredictor`,
-  the phase 6 measuring tool for feature groups.
+  Every future model must implement this interface. `models/linear.py` – `RidgeFeaturePredictor`
+  (phase 6 measuring tool, phase 7 linear model). `models/boosting.py` – `XGBRegressorPredictor`,
+  `XGBRankerPredictor` (`rank:pairwise`, one group per race), `XGBNDCGRankerPredictor`
+  (`rank:ndcg`), `DEFAULT_XGB_PARAMS`.
+  `models/common.py` – shared feature-input checks. `models/train.py` – `ModelSpec`
+  (family + feature set + params), `TUNED_MODELS`/`FINAL_MODEL` (the phase 7 choice),
+  `train_final_model` (joblib + metadata JSON in git-ignored `output/models/`).
 - `src/f1_predictor/evaluation/` – `metrics.py` (`score_race`), `backtest.py` (`run_backtest`,
   walk-forward over `(season, round)`; `run_feature_backtest` for cumulative feature groups),
-  `explore.py` (phase 4 analysis + report generator).
+  `model_selection.py` (`summarize_backtest` with paired ΔMAE, tuning grid, `run_model_tuning`
+  on validation seasons only, `run_model_backtest`), `explore.py` (phase 4 analysis + report).
 - `src/f1_predictor/features/` – `groups.py` (one function per feature group, plus the shared
   `retirement_mask`), `build.py` (`FeatureConfig`, `build_features`, `feature_columns`,
   `write_feature_table`). Models read only `feature_columns(config)`; the leakage tests in
@@ -68,6 +79,11 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
   `"Engine"`, etc.; newer ones use `"Lapped"`, `"Retired"`, `"Did not start"`, `"Disqualified"`.
   Any retirement/DNF logic must handle both vocabularies.
 - Compare models only via `run_backtest` on identical races with the same `min_train_races`.
+- Hyperparameters and model choice are made on validation races (≤ 2021) only; the holdout
+  (≥ 2022) is for reporting. Don't tune on holdout scores. Rules: hyperparameters per family by
+  lowest validation MAE; final model by highest validation podium overlap (tie: winner hit
+  rate, then MAE), see `select_final_model`. XGBoost models use no `subsample`:
+  row sampling depends on the thread count and breaks reproducibility across machines.
 
 ## Git
 

@@ -27,13 +27,15 @@ De importnaam is `f1_predictor`; de installeerbare CLI heet `f1`.
 - `src/f1_predictor/data/`: Jolpica-client, parsing en seizoensbestanden.
 - `src/f1_predictor/features/`: featuregroepen (`groups.py`) en de featuretabel met
   `FeatureConfig` (`build.py`).
-- `src/f1_predictor/models/`: voorspellers: baselines en het Ridge-meetinstrument.
-- `src/f1_predictor/evaluation/`: data-exploratie, metrics en backtests.
+- `src/f1_predictor/models/`: voorspellers (baselines, Ridge, XGBoost-regressie en -ranker),
+  modelspecificaties en het trainen van het eindmodel.
+- `src/f1_predictor/evaluation/`: data-exploratie, metrics, backtests en modelselectie.
 - `tests/`: offline tests met synthetische data.
 - `notebooks/`: API-verkenning en experimenten.
 - `data/raw/` en `data/processed/`: lokale parquet-data (ruw en featuretabel); deze wordt
   niet in Git bijgehouden.
-- `output/`: reproduceerbare rapporten en backtestresultaten.
+- `output/`: reproduceerbare rapporten en backtestresultaten; `output/models/` (getrainde
+  modellen) staat niet in git.
 - `docs/`: dataschema, methode en faseverslagen.
 
 ## Kwaliteitscontroles

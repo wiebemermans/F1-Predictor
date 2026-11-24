@@ -247,15 +247,16 @@ df["driver_form_5"] = df.groupby("driver")["finish_position"].transform(
 
 **Doel:** een eerste ML-model dat de baselines probeert te verslaan.
 
-- [ ] Eerst simpel: `LinearRegression` of `Ridge` (als dat de baseline al verslaat, werken je features)
-- [ ] Daarna gradient boosting:
+- [x] Eerst simpel: `LinearRegression` of `Ridge` (als dat de baseline al verslaat, werken je features)
+- [x] Daarna gradient boosting:
   - Regressie (`XGBRegressor`): voorspel de finishpositie en sorteer
   - Learning-to-rank (`XGBRanker`, `rank:pairwise`): groepeer per race, label = `n_coureurs - finishpositie`
-- [ ] Model achter dezelfde `fit`/`predict`-interface als de baselines
-- [ ] Conservatieve hyperparameters (`max_depth` 3-4, lage `learning_rate`, weinig `n_estimators`); tune met tijdsgebaseerde validatie, niet met een willekeurige split
-- [ ] Model opslaan (`joblib` of `save_model`) in `output/models/`
-- [ ] Interpretatie via feature importance of SHAP
-- [ ] **Documentatie bijwerken:** beschrijf de gekozen modelvariant, labels, trainings- en voorspelinterface, hyperparameters, reproduceerbaarheid en vergelijking met de baselines (bijvoorbeeld in `docs/model.md`). Noteer ook beperkingen en hoe interpretaties gelezen moeten worden.
+  - Extra: `rank:ndcg` (weegt de top zwaarder) voor het winnaarsprobleem; voorspelt de winnaar niet beter dan de polesitter
+- [x] Model achter dezelfde `fit`/`predict`-interface als de baselines
+- [x] Conservatieve hyperparameters (`max_depth` 3-4, lage `learning_rate`, weinig `n_estimators`); tune met tijdsgebaseerde validatie, niet met een willekeurige split (getuned op 2015–2021, gerapporteerd op de holdout 2022–2026; de beste bomen bleken nog ondieper: diepte 2)
+- [x] Model opslaan (`joblib` of `save_model`) in `output/models/` (niet in git; opnieuw te bouwen met `train_final_model`)
+- [x] Interpretatie via feature importance of SHAP (gain en TreeSHAP uit XGBoost zelf)
+- [x] **Documentatie bijgewerkt:** modelvarianten, labels, interface, hyperparameters, tuningprotocol, reproduceerbaarheid, vergelijking met de baselines, interpretatie en beperkingen staan in [`docs/model.md`](docs/model.md).
 
 **Klaar wanneer:** het model draait in de backtest en je hebt een eerlijke vergelijking met de baselines. Verslaat het ze nog niet? Dat is normaal; ga terug naar fase 6.
 

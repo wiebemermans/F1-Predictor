@@ -18,6 +18,7 @@ Dit project is grotendeels ontwikkeld met hulp van een large language model (LLM
 - [Fase 4: data-exploratie](docs/phase4_exploration.md)
 - [Fase 5: baselines en backtestmethode](docs/phase5_baselines.md)
 - [Fase 6: features, leakage-tests en experimentenlogboek](docs/features.md)
+- [Fase 7: model, tuning en vergelijking met de baselines](docs/model.md)
 - [Volledig stappenplan](F1-voorspelmodel-stappenplan.md)
 
 ## Baseline-backtest
@@ -44,5 +45,20 @@ uv run python -c "from f1_predictor.evaluation.backtest import run_feature_backt
 
 De scores per experiment staan in `output/backtest_features.csv`; de conclusies staan in het
 [experimentenlogboek](docs/features.md#experimentenlogboek).
+
+## Model
+
+Kies hyperparameters op de validatieraces (2015–2021), vergelijk de gekozen modellen met de
+baselines en train het eindmodel (een XGBoost-ranker):
+
+```powershell
+uv run python -c "from f1_predictor.evaluation.model_selection import run_model_tuning; run_model_tuning()"
+uv run python -c "from f1_predictor.evaluation.model_selection import run_model_backtest; run_model_backtest()"
+uv run python -c "from f1_predictor.models.train import train_final_model; train_final_model()"
+```
+
+Op de holdout (2022–2026) verslaan de modellen de kwalificatiebaseline bescheiden op MAE en
+Spearman, maar voorspellen ze de winnaar niet vaker juist dan de regel "de polesitter wint". Resultaten, interpretatie en beperkingen staan
+in [docs/model.md](docs/model.md).
 
 > 🚧 Work in progress
