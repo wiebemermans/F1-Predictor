@@ -374,18 +374,19 @@ def test_write_feature_table_writes_parquet(tmp_path):
     assert not output_path.with_suffix(".parquet.tmp").exists()
 
 
-def test_cli_features_builds_table(monkeypatch):
+def test_cli_features_builds_table_with_configured_features(monkeypatch):
     calls = []
-    monkeypatch.setattr(cli, "write_feature_table", lambda: calls.append(True))
+    monkeypatch.setattr(cli, "write_feature_table", lambda **kwargs: calls.append(kwargs))
 
     result = CliRunner().invoke(cli.app, ["features"])
 
     assert result.exit_code == 0
-    assert calls == [True]
+    # De vastgelegde config/config.yaml gebruikt de standaardfeatures.
+    assert calls == [{"config": FeatureConfig()}]
 
 
-def test_cli_features_reports_missing_raw_data(monkeypatch):
-    def missing_data():
+def test_cli_features_reports_missing_raw_data(monkeypatch, caplog):
+    def missing_data(**kwargs):
         raise FileNotFoundError("Geen parquet-bestanden gevonden in data/raw")
 
     monkeypatch.setattr(cli, "write_feature_table", missing_data)
@@ -393,7 +394,7 @@ def test_cli_features_reports_missing_raw_data(monkeypatch):
     result = CliRunner().invoke(cli.app, ["features"])
 
     assert result.exit_code == 1
-    assert "f1 fetch" in result.output
+    assert "f1 fetch" in caplog.text
 
 
 # --- Meetinstrument: feature-backtest ---

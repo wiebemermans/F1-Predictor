@@ -58,7 +58,8 @@ def _is_positive_int(value: object) -> bool:
 class FeatureConfig:
     """Welke featuregroepen aanstaan en met welke vensters ze worden berekend.
 
-    `config/config.yaml` volgt in fase 8 en wordt dan in deze dataclass ingelezen.
+    De CLI leest deze waarden uit de sectie `features` van `config/config.yaml`; de defaults
+    hier zijn dezelfde als in dat bestand.
     """
 
     groups: tuple[str, ...] = tuple(FEATURE_GROUPS)

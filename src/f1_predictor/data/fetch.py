@@ -11,12 +11,25 @@ from typing import Any
 import pandas as pd
 
 from f1_predictor.data.jolpica import JolpicaClient
-from f1_predictor.data.parse import flatten_qualifying, flatten_results, flatten_sprint
+from f1_predictor.data.parse import (
+    flatten_qualifying,
+    flatten_race_entry,
+    flatten_results,
+    flatten_sprint,
+)
 from f1_predictor.paths import CACHE_DIR, RAW_DIR
 
 log = logging.getLogger(__name__)
 
 KEYS = ["season", "round", "driver_id"]
+
+
+class NoResultsError(ValueError):
+    """Een seizoen heeft (nog) geen enkele race-uitslag."""
+
+
+class QualifyingNotAvailableError(LookupError):
+    """Er is (nog) geen kwalificatie-uitslag voor de gevraagde race."""
 
 
 def _collect(
@@ -34,7 +47,7 @@ def _collect(
 def build_season_table(season: int, client: JolpicaClient) -> pd.DataFrame:
     df = _collect(client, season, "results", flatten_results)
     if df.empty:
-        raise ValueError(f"Geen resultaten gevonden voor {season}")
+        raise NoResultsError(f"Geen resultaten gevonden voor {season}")
 
     quali = _collect(client, season, "qualifying", flatten_qualifying)
     if quali.empty:
@@ -95,7 +108,37 @@ def fetch_seasons(
                 len(df),
                 df["round"].nunique(),
             )
+        except NoResultsError:
+            # Vóór de eerste race van het jaar is er nog niets op te halen; dat is geen fout.
+            if season >= this_year:
+                log.warning("%d: nog geen race-uitslagen, seizoen overgeslagen", season)
+                continue
+            log.exception("%d: mislukt", season)
+            failed.append(season)
         except Exception:
             log.exception("%d: mislukt", season)
             failed.append(season)
     return failed
+
+
+def fetch_race_entry(
+    season: int, round_number: int, client: JolpicaClient | None = None
+) -> pd.DataFrame:
+    """Deelnemers, teams en kwalificatieposities van één race, ook vóór de race zelf.
+
+    Zonder `client` wordt een client zonder cache gebruikt: een lege respons van vóór de
+    kwalificatie mag niet uit de cache terugkomen nadat de kwalificatie verreden is.
+    """
+    client = client or JolpicaClient()
+    rows: list[dict[str, Any]] = []
+    for race in client.races(f"{season}/{round_number}/qualifying"):
+        rows.extend(flatten_race_entry(race))
+    if not rows:
+        raise QualifyingNotAvailableError(
+            f"Nog geen kwalificatie-uitslag voor {season} ronde {round_number}; "
+            "voorspel na de kwalificatie"
+        )
+    entry = pd.DataFrame(rows)
+    entry["date"] = pd.to_datetime(entry["date"])
+    entry["quali_position"] = entry["quali_position"].astype("Int64")
+    return entry.sort_values(["quali_position", "driver_id"]).reset_index(drop=True)

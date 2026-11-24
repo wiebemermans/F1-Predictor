@@ -12,13 +12,16 @@ import logging
 import math
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 from f1_predictor.features.build import FeatureConfig, build_features
 from f1_predictor.models.baselines import RacePredictor
-from f1_predictor.models.train import FEATURE_SETS, TUNED_MODELS, ModelSpec
+from f1_predictor.models.train import FEATURE_SETS, ModelSpec
+from f1_predictor.output import write_json
 from f1_predictor.paths import OUTPUT_DIR, RAW_DIR
+from f1_predictor.runinfo import utc_now
 
 from .backtest import BASELINE_FACTORIES, _load_raw_results, _write_csv, run_backtest
 
@@ -218,18 +221,64 @@ def run_model_backtest(
     output_path: Path = OUTPUT_DIR / "backtest_models.csv",
     summary_path: Path = OUTPUT_DIR / "model_comparison.csv",
     min_train_races: int = 20,
-    models: Mapping[str, ModelSpec] | None = None,
+    *,
+    models: Mapping[str, ModelSpec],
     config: FeatureConfig | None = None,
 ) -> pd.DataFrame:
     """Score de baselines en de gekozen modellen op exact dezelfde races (alle testraces).
 
     Schrijft de scores per race naar `output_path` en de samenvatting per periode
-    (validatie, holdout, alles) naar `summary_path`.
+    (validatie, holdout, alles) naar `summary_path`. De CLI (`f1 backtest`) haalt `models`
+    uit `config/config.yaml`.
     """
     config = config or FeatureConfig()
-    specs = (models or TUNED_MODELS).values()
     data = build_features(_load_raw_results(data_dir), config)
-    results = run_backtest(data, _predictors(specs, config), min_train_races)
+    results = run_backtest(data, _predictors(models.values(), config), min_train_races)
     _write_csv(results, output_path)
     _write_csv(summarize_periods(results), summary_path)
     return results
+
+
+COMPARISON_SCHEMA_VERSION = 1
+
+
+def comparison_payload(
+    summary: pd.DataFrame,
+    models: Mapping[str, ModelSpec],
+    final_model: str,
+    run: Mapping[str, Any],
+    reference: str = "qualifying_position",
+) -> dict[str, Any]:
+    """De samenvatting per periode (`summarize_periods`) als JSON-structuur voor een website.
+
+    Elke modelrij krijgt een `family` (`baseline` voor de baselines); `final_model` is de
+    naam van het eindmodel, zodat een website dat kan uitlichten.
+    """
+    families = {spec.name: spec.family for spec in models.values()}
+    periods: dict[str, list[dict[str, Any]]] = {}
+    for period, rows in summary.groupby("period", sort=False):
+        records = rows.drop(columns="period").to_dict(orient="records")
+        periods[str(period)] = [
+            {"model": row["model"], "family": families.get(row["model"], "baseline"), **row}
+            for row in records
+        ]
+    return {
+        "schema_version": COMPARISON_SCHEMA_VERSION,
+        "generated_at": utc_now(),
+        "final_model": final_model,
+        "reference": reference,
+        "periods": periods,
+        "run": dict(run),
+    }
+
+
+def write_comparison_json(
+    summary: pd.DataFrame,
+    models: Mapping[str, ModelSpec],
+    final_model: str,
+    run: Mapping[str, Any],
+    output_path: Path = OUTPUT_DIR / "model_comparison.json",
+) -> Path:
+    """Schrijf `comparison_payload` naar `output_path` (standaard naast de CSV-samenvatting)."""
+    write_json(output_path, comparison_payload(summary, models, final_model, run))
+    return output_path
