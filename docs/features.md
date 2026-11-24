@@ -125,7 +125,7 @@ coureur-circuitcombinatie, wat in fase 4 als risico naar voren kwam.
 - Niet-starters (DNS) tellen als uitval, diskwalificaties niet.
 - Lege historische features (NaN) worden in de tabel niet ingevuld; elk model beslist zelf hoe
   het daarmee omgaat. Het Ridge-meetinstrument vult ze met de mediaan van de trainingsfold.
-  In de huidige data zijn 63 rijen zonder coureursvorm (de eerste race van 2014 en debutanten)
+  In de huidige data zijn 65 rijen zonder coureursvorm (de eerste race van 2014 en debutanten)
   en 44 rijen zonder teamvorm (de eerste race van 2014 en de eerste race van elke nieuwe of
   hernoemde `constructor_id`).
 
@@ -151,7 +151,7 @@ de tests gevangen.
 
 ## Meetinstrument
 
-Het echte model volgt in fase 7. Om featuregroepen nu al te meten, gebruikt fase 6
+Het model van fase 7 staat in [model.md](model.md). Om featuregroepen te meten, gebruikt fase 6
 `RidgeFeaturePredictor` ([`linear.py`](../src/f1_predictor/models/linear.py)): mediaan-imputatie,
 standaardisatie en Ridge-regressie (`alpha = 1.0`) op `finish_position`, in elke
 walk-forward-fold opnieuw getraind op alleen eerdere races. De voorspelde finish wordt omgezet in
@@ -169,21 +169,22 @@ kolommen als `output/backtest_baselines.csv`.
 
 ## Experimentenlogboek
 
-Run van 2026-11-23 op 13 seizoenen (2014–2026): 269 races, waarvan 249 testraces per model.
+Run van 2026-11-24 op 13 seizoenen (2014 tot en met ronde 21 van 2026): 273 races, waarvan 253
+testraces per model.
 De baselines geven exact dezelfde scores als in fase 5. ΔMAE is het gemiddelde verschil per race
 met de vorige regel (gepaard over dezelfde races), met de standaardfout tussen haakjes; negatief
 is beter.
 
 | Experiment | MAE | Spearman | Winnaar juist | Podiumoverlap | Top-10-overlap | ΔMAE (SE) |
 |---|---:|---:|---:|---:|---:|---:|
-| Baseline kwalificatiepositie | 3.514 | 0.635 | 56.2% | 2.036 | 7.651 | – |
-| Baseline kampioenschapspunten | 4.018 | 0.558 | 41.4% | 1.771 | 7.241 | – |
-| `starting_position` | 3.523 | 0.634 | 56.2% | 2.036 | 7.651 | +0.010 (0.005)* |
-| + `driver_form` | 3.468 | 0.648 | 54.6% | 1.992 | 7.767 | −0.056 (0.023) |
-| + `team_form` | 3.457 | 0.651 | 54.2% | 2.036 | 7.759 | −0.011 (0.013) |
-| + `championship` | 3.440 | 0.653 | 53.4% | 2.040 | 7.791 | −0.017 (0.009) |
-| + `circuit_history` | 3.444 | 0.653 | 52.6% | 2.032 | 7.783 | +0.004 (0.005) |
-| + `teammate` | 3.449 | 0.652 | 53.4% | 2.016 | 7.775 | +0.005 (0.010) |
+| Baseline kwalificatiepositie | 3.517 | 0.637 | 56.1% | 2.024 | 7.648 | – |
+| Baseline kampioenschapspunten | 4.006 | 0.561 | 41.1% | 1.763 | 7.265 | – |
+| `starting_position` | 3.527 | 0.635 | 56.1% | 2.024 | 7.648 | +0.010 (0.005)* |
+| + `driver_form` | 3.467 | 0.650 | 54.5% | 1.988 | 7.771 | −0.059 (0.023) |
+| + `team_form` | 3.454 | 0.653 | 54.5% | 2.028 | 7.767 | −0.014 (0.013) |
+| + `championship` | 3.437 | 0.655 | 53.8% | 2.032 | 7.798 | −0.017 (0.009) |
+| + `circuit_history` | 3.441 | 0.655 | 53.0% | 2.024 | 7.791 | +0.004 (0.005) |
+| + `teammate` | 3.446 | 0.655 | 53.8% | 2.008 | 7.783 | +0.005 (0.010) |
 
 \* ten opzichte van de kwalificatiebaseline.
 
@@ -193,8 +194,8 @@ is beter.
    kwalificatiebaseline, zoals verwacht. Het kleine verschil komt van de 22 rijen zonder
    kwalificatiepositie, die de baseline altijd achteraan zet en Ridge via de vlag anders kan
    plaatsen.
-2. `driver_form`: de duidelijkste winst (MAE −0.056, ongeveer 2.4 standaardfouten; Spearman
-   +0.014). Recente vorm voegt informatie toe bovenop de startpositie.
+2. `driver_form`: de duidelijkste winst (MAE −0.059, ongeveer 2.5 standaardfouten; Spearman
+   +0.015). Recente vorm voegt informatie toe bovenop de startpositie.
 3. `team_form`: een kleine verbetering die binnen de ruis valt. Teamsterkte zit waarschijnlijk
    al grotendeels in de kwalificatiepositie en de coureursvorm.
 4. `championship`: een kleine, randgeldige verbetering (ongeveer 1.9 standaardfouten) en de
@@ -203,16 +204,16 @@ is beter.
    coureur-circuitcombinatie uit fase 4.
 6. `teammate`: geen winst; de kwalificatieposities bevatten de onderlinge vergelijking
    waarschijnlijk al grotendeels.
-7. Over alles: de beste combinatie (t/m `championship`) verbetert de MAE met 0.074 posities ten
-   opzichte van de kwalificatiebaseline (ongeveer 2.5 standaardfouten) en is in 51% van de races
-   beter en in 39% slechter. Het aandeel juiste winnaars daalt wel van 56.2% naar 53.4%. Een
+7. Over alles: de beste combinatie (t/m `championship`) verbetert de MAE met 0.080 posities ten
+   opzichte van de kwalificatiebaseline (ongeveer 2.8 standaardfouten) en is in 51% van de races
+   beter en in 39% slechter. Het aandeel juiste winnaars daalt wel van 56.1% naar 53.8%. Een
    waarschijnlijke verklaring is dat Ridge de fout over het hele veld minimaliseert en de
-   polesitter door vormfeatures soms terugzet. Fase 7 kan dit met een rangschikkingsmodel
-   (`XGBRanker`) of niet-lineaire interacties opnieuw bekijken.
+   polesitter door vormfeatures soms terugzet. Fase 7 bekijkt dit opnieuw met
+   rangschikkingsmodellen; zie [model.md](model.md).
 
 De verschillen zijn klein, en dit zijn historische backtestscores, geen garantie voor
-toekomstige races. Alle groepen blijven voorlopig standaard aan; de featurekeuze voor het model
-valt in fase 7.
+toekomstige races. Alle groepen blijven standaard aan in de featuretabel. De featurekeuze per
+model is in fase 7 gemaakt op de validatieraces (2015–2021); zie [model.md](model.md).
 
 ## Beperkingen
 
