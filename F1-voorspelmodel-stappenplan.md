@@ -233,7 +233,7 @@ df["driver_form_5"] = df.groupby("driver")["finish_position"].transform(
 
 **Praktisch**
 
-- [x] Elke featuregroep in een eigen functie in `features/`, aan/uit te zetten via de config (`FeatureConfig`; `config.yaml` volgt in fase 8)
+- [x] Elke featuregroep in een eigen functie in `features/`, aan/uit te zetten via de config (`FeatureConfig`, ingelezen uit `config/config.yaml`)
 - [x] Leakage-test in pytest: wijzig de uitslag van race N kunstmatig en controleer dat de features van race N niet veranderen
 - [x] Experimentenlogboek bijhouden (feature, backtestscore, conclusie); scores in `output/backtest_features.csv`
 - [x] CLI-commando `f1 features` dat een tabel bouwt in `data/processed/`
@@ -265,7 +265,8 @@ df["driver_form_5"] = df.groupby("driver")["finish_position"].transform(
 
 **Doel:** het project bruikbaar maken zonder code aan te passen.
 
-`config/config.yaml`:
+Oorspronkelijke schets van `config/config.yaml` (de uiteindelijke velden staan in
+[`docs/usage.md`](docs/usage.md)):
 
 ```yaml
 data:
@@ -281,14 +282,14 @@ backtest:
   min_train_races: 20
 ```
 
-- [ ] Config laden in één module (`dataclasses` of `pydantic`)
-- [ ] Typer-commando's: `f1 fetch`, `f1 features`, `f1 backtest`, `f1 predict --season 2026 --round 10`
-- [ ] Outputs als JSON in `output/` (rechtstreeks inleesbaar door de website)
+- [x] Config laden in één module (`dataclasses`, geen extra dependency): `config.py` met validatie die onbekende sleutels weigert; de modelkeuze uit fase 7 staat nu in `config.yaml`
+- [x] Typer-commando's: `f1 fetch`, `f1 features`, `f1 backtest`, `f1 predict --season 2026 --round 10`, plus `f1 tune` en `f1 train` (vervangen de `python -c`-aanroepen); `f1 predict` traint het eindmodel telkens opnieuw op alle races vóór de gevraagde race
+- [x] Outputs als JSON in `output/` (rechtstreeks inleesbaar door de website): `output/predictions/{seizoen}-{ronde}.json` met `latest.json`, en `output/model_comparison.json`
   - Behandel het JSON-formaat als een vast contract: `schema_version`, `generated_at`, modelnaam, race-info (seizoen, ronde, naam), voorspelde volgorde en de backtestsamenvatting (`summarize_backtest`)
-  - Documenteer het formaat (bv. in `docs/website.md`), zodat elke latere site (GitHub Pages of een eigen persoonlijke website) alleen van dit formaat afhangt en niet van de Python-code
-- [ ] `logging` in plaats van `print`
-- [ ] Vaste random seeds; sla config en commit-hash mee op bij elke run
-- [ ] **Documentatie bijwerken:** documenteer configuratievelden met defaults en toegestane waarden, CLI-commando's met voorbeelden, outputbestanden en veelvoorkomende fouten (README of `docs/usage.md`).
+  - Documenteer het formaat (in [`docs/usage.md`](docs/usage.md#json-formaat-contract-voor-een-website)), zodat elke latere site (GitHub Pages of een eigen persoonlijke website) alleen van dit formaat afhangt en niet van de Python-code
+- [x] `logging` in plaats van `print`
+- [x] Vaste random seeds (`random_state=0`, geen `subsample`); sla config en commit-hash mee op bij elke run (`run`-blok in elke JSON, git-info in de modelmetadata)
+- [x] **Documentatie bijgewerkt:** configuratievelden met defaults en toegestane waarden, CLI-commando's met voorbeelden, outputbestanden, het JSON-formaat en veelvoorkomende fouten staan in [`docs/usage.md`](docs/usage.md); README, `CLAUDE.md` en de fasedocumenten gebruiken de CLI.
 
 **Klaar wanneer:** een vreemde kan je repo clonen en met vier commando's tot een voorspelling komen.
 

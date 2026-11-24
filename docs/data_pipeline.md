@@ -12,14 +12,31 @@ verloopt standaard na één uur.
 Haal data op met:
 
 ```powershell
-uv run f1 fetch --start 2014 --end 2026
+uv run f1 fetch
+uv run f1 fetch --start 2014 --end 2026   # expliciet bereik
 ```
 
-`--start` is standaard 2014 en `--end` het huidige kalenderjaar. Een bestaand
-bestand van een afgesloten seizoen wordt overgeslagen. Het lopende seizoen
-wordt opnieuw opgehaald; `--force` haalt ook afgesloten seizoenen opnieuw op.
-Een fout in één seizoen wordt gelogd, waarna de andere seizoenen nog worden
-verwerkt. Als een of meer seizoenen mislukken, eindigt de CLI met exitcode 1.
+Zonder opties komen `--start` en `--end` uit `data.start_season` (2014) en
+`data.end_season` in `config/config.yaml`; `end_season: null` is het huidige
+kalenderjaar. Een bestaand bestand van een afgesloten seizoen wordt
+overgeslagen. Het lopende seizoen wordt opnieuw opgehaald; `--force` haalt ook
+afgesloten seizoenen opnieuw op. Een fout in één seizoen wordt gelogd, waarna
+de andere seizoenen nog worden verwerkt. Als een of meer seizoenen mislukken,
+eindigt de CLI met exitcode 1. Heeft het lopende jaar nog geen enkele
+race-uitslag (vóór de eerste race), dan wordt dat seizoen met een waarschuwing
+overgeslagen; dat telt niet als fout. Een afgelopen seizoen zonder uitslagen
+blijft wel een fout.
+
+## Deelnemers van een komende race
+
+De seizoensbestanden bevatten alleen races met een uitslag. Voor een race die
+nog moet komen haalt `f1 predict` na de kwalificatie de kwalificatie-uitslag
+van die ene race op (`/{seizoen}/{ronde}/qualifying`). Daaruit komen de
+deelnemers, hun team, `driver_code` en `quali_position`, plus racenaam,
+circuit en datum. Dit verzoek gaat bewust niet via de cache: een lege respons
+van vóór de kwalificatie zou anders tot een uur lang blijven hangen. De
+seizoensbestanden in `data/raw/` worden hierdoor niet aangepast. Zie
+[usage.md](usage.md).
 
 ## Opbouw en opslag
 

@@ -155,9 +155,9 @@ races) en wint daarmee de gelijkstand.
 Op de validatieraces is geen enkel model beter in de top 3 dan de kwalificatievolgorde zelf (2.100).
 Op de holdout zijn ze dat alle vier wel (zie hieronder).
 
-De keuze staat als `TUNED_MODELS` en `FINAL_MODEL` in
-[train.py](../src/f1_predictor/models/train.py); een test controleert dat `FINAL_MODEL` uit de
-regels volgt. In fase 8 verhuist de keuze naar `config.yaml`.
+De keuze staat in de sectie `model` van [config.yaml](../config/config.yaml): `tuned` per
+familie en `final` voor het eindmodel. De test `test_configured_models_follow_from_the_selection_rules`
+past de regels toe op `output/model_tuning.csv` en controleert dat de configuratie eruit volgt.
 
 **Patronen in de tuning**
 
@@ -276,7 +276,7 @@ modelkeuze opgehaald en zaten dus nergens in de selectie.
      zijn, waartussen de selectie vooral ruis oppikt. Het eindmodel nu op basis van de holdout
      wisselen zou de holdout zijn onafhankelijkheid ontnemen.
 4. **Wat dit betekent.** Volgens het stappenplan is een model dat de startgrid licht verslaat al
-   een goed resultaat. Wie in fase 8 toch een ander model kiest op basis van de holdout, neemt
+   een goed resultaat. Wie later toch een ander model kiest op basis van de holdout, neemt
    een beslissing die door de holdout is beïnvloed. Voorbeelden zijn de regressie of de
    ndcg-ranker voor de top 3, of Ridge voor de hele volgorde. Vanaf dan zijn alleen nieuwe races
    nog een onafhankelijke test.
@@ -321,30 +321,36 @@ voegden iets toe. `circuit_history` en `teammate` worden nauwelijks gebruikt
 ## Eindmodel en opslag
 
 ```powershell
-uv run python -c "from f1_predictor.models.train import train_final_model; train_final_model()"
+uv run f1 train
 ```
 
-`train_final_model` traint `FINAL_MODEL` op alle races met een uitslag en schrijft:
+`f1 train` traint het eindmodel (`model.final` in `config/config.yaml`) op alle races met een
+uitslag en schrijft:
 
 - `output/models/xgb_ranker_d2_n50_all.joblib`: het getrainde voorspellerobject (met
   featurekolommen), te laden met `joblib.load` en direct bruikbaar met `predict(race)`. De
   invoer moet met `build_features` en dezelfde `FeatureConfig` gebouwd zijn.
 - `output/models/xgb_ranker_d2_n50_all.json`: metadata (klasse, parameters, featurekolommen,
   `FeatureConfig`, eerste en laatste trainingsrace, aantal rijen, versies van Python, XGBoost,
-  scikit-learn en pandas, aanmaakdatum). De commit-hash volgt in fase 8.
+  scikit-learn en pandas, git-commit met `dirty`-vlag, aanmaakdatum).
 - `output/model_feature_importance.csv`: de interpretatie hierboven.
 
 `output/models/` staat in `.gitignore`: het model is binair en met één commando opnieuw te bouwen.
 Joblib-bestanden zijn pickles. Laad alleen bestanden die je zelf hebt gemaakt, met dezelfde
 XGBoost- en scikit-learn-versies als in de metadata.
 
+Voor een voorspelling is dit opgeslagen model niet nodig: `f1 predict` traint het eindmodel
+telkens opnieuw op alle races vóór de gevraagde race (enkele seconden). Zo is een voorspelling
+identiek aan die race in de backtest, ook voor een race die al gereden is. Zie
+[usage.md](usage.md).
+
 ## Reproduceren
 
 ```powershell
-uv run f1 fetch --start 2014 --end 2026   # ververst het lopende seizoen
-uv run python -c "from f1_predictor.evaluation.model_selection import run_model_tuning; run_model_tuning()"     # ~45 min
-uv run python -c "from f1_predictor.evaluation.model_selection import run_model_backtest; run_model_backtest()" # ~1 min
-uv run python -c "from f1_predictor.models.train import train_final_model; train_final_model()"                 # seconden
+uv run f1 fetch      # ververst het lopende seizoen
+uv run f1 tune       # ~45 min
+uv run f1 backtest   # ~1 min
+uv run f1 train      # seconden
 ```
 
 | Bestand | Inhoud |
@@ -352,9 +358,12 @@ uv run python -c "from f1_predictor.models.train import train_final_model; train
 | `output/model_tuning.csv` | samenvatting per configuratie op de validatieraces, met familie, featureset en parameters |
 | `output/backtest_models.csv` | scores per race voor de baselines en de vier gekozen modellen, zelfde kolommen als de fase 5/6-CSV's |
 | `output/model_comparison.csv` | samenvatting per periode (`validation`, `holdout`, `all`) |
+| `output/model_comparison.json` | dezelfde samenvatting als JSON voor een website ([usage.md](usage.md)) |
 | `output/model_feature_importance.csv` | featurebelang van het eindmodel |
 
 De uitkomsten zijn deterministisch: twee runs van `run_model_backtest` gaven byte-identieke CSV's.
+In fase 8 gaf `f1 backtest` (met de keuze uit `config.yaml` in plaats van constanten in de code)
+opnieuw byte-identieke CSV's voor alle drie de suites.
 Controles die bij de run van 2026-11-24 zijn uitgevoerd:
 
 - de baselinerijen in `backtest_models.csv` zijn identiek aan `backtest_baselines.csv`;
@@ -399,5 +408,5 @@ functie in het pakket opgenomen.
   reglementswissels.
 - **Terug naar fase 6 voor sterkere features:** kwalificatietijden (gat tot pole) en team-ID's
   koppelen bij naamswijzigingen.
-- **Fase 8:** de modelkeuze in `config.yaml` zetten en bij elke run config en commit-hash
-  opslaan.
+- **Fase 10:** de volgende race automatisch bepalen en `f1 predict` na elke kwalificatie
+  laten draaien; na de race de voorspelling met de uitslag vergelijken.
