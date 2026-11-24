@@ -4,24 +4,24 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
+from typer.testing import CliRunner
 
+from f1_predictor import cli
+from f1_predictor.config import load_config
 from f1_predictor.evaluation.model_selection import (
     SUMMARY_COLUMNS,
+    comparison_payload,
     run_model_backtest,
     run_model_tuning,
     select_final_model,
     select_tuned_models,
     summarize_backtest,
+    summarize_periods,
     tuning_candidates,
 )
 from f1_predictor.features.build import FeatureConfig, build_features, feature_columns
-from f1_predictor.models.train import (
-    FEATURE_SETS,
-    FINAL_MODEL,
-    TUNED_MODELS,
-    ModelSpec,
-    train_final_model,
-)
+from f1_predictor.models.train import FEATURE_SETS, ModelSpec, train_final_model
+from f1_predictor.paths import OUTPUT_DIR
 
 POINTS = {1: 25.0, 2: 18.0, 3: 15.0, 4: 12.0, 5: 10.0}
 SMALL_XGB = {"max_depth": 2, "n_estimators": 5}
@@ -201,21 +201,16 @@ def test_select_final_model_uses_podium_then_winner_then_mae():
         select_final_model(summary, {"ridge": "unknown"})
 
 
-def test_current_final_model_follows_from_the_selection_rules():
-    # De vastgelegde keuze in train.py moet volgen uit de regels; scores uit de tuningrun van
-    # 2026-11-24 (validatieraces 2015-2021) voor de vier gekozen configuraties.
-    summary = pd.DataFrame(
-        {
-            "model": [spec.name for spec in TUNED_MODELS.values()],
-            "podium_overlap": [292 / 140, 284 / 140, 292 / 140, 290 / 140],
-            "winner_hit": [69 / 140, 71 / 140, 75 / 140, 74 / 140],
-            "mae_positions": [3.573506, 3.562403, 3.533377, 3.576818],
-        }
-    )
-    tuned = {family: spec.name for family, spec in TUNED_MODELS.items()}
+def test_configured_models_follow_from_the_selection_rules():
+    # De keuze in config/config.yaml moet volgen uit de regels, toegepast op de vastgelegde
+    # tuningrun (output/model_tuning.csv, validatieraces 2015-2021).
+    summary = pd.read_csv(OUTPUT_DIR / "model_tuning.csv")
+    config = load_config()
 
-    assert list(TUNED_MODELS) == ["ridge", "xgb_regressor", "xgb_ranker", "xgb_ranker_ndcg"]
-    assert select_final_model(summary, tuned) == FINAL_MODEL
+    tuned = select_tuned_models(summary, tuning_candidates())
+
+    assert tuned == {family: spec.name for family, spec in config.model.tuned.items()}
+    assert select_final_model(summary, tuned) == config.model.final
 
 
 # --- Tuning, modelbacktest en eindmodel ---
@@ -290,3 +285,70 @@ def test_train_final_model_saves_model_metadata_and_importance(tmp_path):
     importance = pd.read_csv(importance_path)
     assert importance["feature"].tolist() == feature_columns()
     assert set(importance["model"]) == {spec.name}
+
+
+# --- JSON-samenvatting en CLI ---
+
+
+def test_comparison_payload_groups_models_per_period_with_family():
+    results = pd.concat(
+        [
+            _results("qualifying_position", [3.0, 4.0], [1, 0]).assign(season=[2021, 2022]),
+            _results("xgb_ranker_d2_n5_all", [2.0, 4.5], [1, 1]).assign(season=[2021, 2022]),
+        ],
+        ignore_index=True,
+    )
+    models = {"xgb_ranker": ModelSpec("xgb_ranker", "all", SMALL_XGB)}
+
+    payload = comparison_payload(
+        summarize_periods(results), models, "xgb_ranker_d2_n5_all", {"git_commit": "abc"}
+    )
+
+    assert payload["schema_version"] == 1
+    assert payload["final_model"] == "xgb_ranker_d2_n5_all"
+    assert list(payload["periods"]) == ["validation", "holdout", "all"]
+    holdout = {row["model"]: row for row in payload["periods"]["holdout"]}
+    assert holdout["qualifying_position"]["family"] == "baseline"
+    assert holdout["xgb_ranker_d2_n5_all"]["family"] == "xgb_ranker"
+    assert holdout["xgb_ranker_d2_n5_all"]["delta_mae"] == pytest.approx(0.5)
+    assert payload["run"] == {"git_commit": "abc"}
+
+
+def test_cli_backtest_runs_the_chosen_suite_with_configured_settings(tmp_path, monkeypatch):
+    calls = {}
+    monkeypatch.setattr(cli, "run_baseline_backtest", lambda **kw: calls.update(baselines=kw))
+    monkeypatch.setattr(cli, "run_feature_backtest", lambda **kw: calls.update(features=kw))
+    results = pd.concat(
+        [_results("qualifying_position", [3.0], [1]), _results("m", [2.0], [1])],
+        ignore_index=True,
+    )
+    monkeypatch.setattr(cli, "run_model_backtest", lambda **kw: calls.update(models=kw) or results)
+    monkeypatch.setattr(
+        cli,
+        "write_comparison_json",
+        lambda summary, models, final, run: (
+            calls.update(json=(len(summary), final)) or tmp_path / "x.json"
+        ),
+    )
+    runner = CliRunner()
+
+    for suite in ("baselines", "features", "models"):
+        result = runner.invoke(cli.app, ["backtest", "--suite", suite])
+        assert result.exit_code == 0, result.output
+
+    config = load_config()
+    assert calls["baselines"] == {"min_train_races": 20}
+    assert calls["features"] == {"min_train_races": 20, "config": config.features}
+    assert calls["models"]["models"] == config.model.tuned
+    # Twee modellen in twee perioden (holdout en alles).
+    assert calls["json"] == (4, "xgb_ranker_d2_n50_all")
+
+
+def test_cli_train_uses_the_configured_final_model(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli, "train_final_model", lambda **kw: calls.append(kw))
+
+    result = CliRunner().invoke(cli.app, ["train"])
+
+    assert result.exit_code == 0
+    assert calls[0]["spec"] == load_config().final_spec

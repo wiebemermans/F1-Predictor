@@ -43,7 +43,9 @@ features = table[feature_columns(config)]
 ## Configuratie
 
 `FeatureConfig` in [`build.py`](../src/f1_predictor/features/build.py) bepaalt welke groepen
-aanstaan. In fase 8 wordt `config/config.yaml` in deze dataclass ingelezen.
+aanstaan. De CLI leest de waarden uit de sectie `features` van
+[`config/config.yaml`](../config/config.yaml) (zie [usage.md](usage.md)); de defaults hieronder
+zijn dezelfde als in dat bestand.
 
 | Veld | Standaard | Betekenis |
 |---|---|---|
@@ -161,7 +163,7 @@ baselines draaien in één `run_backtest`-aanroep met `min_train_races=20`, dus 
 races.
 
 ```powershell
-uv run python -c "from f1_predictor.evaluation.backtest import run_feature_backtest; run_feature_backtest()"
+uv run f1 backtest --suite features
 ```
 
 De output is `output/backtest_features.csv`, met één rij per model en testrace en dezelfde

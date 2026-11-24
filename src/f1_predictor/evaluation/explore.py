@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TypedDict
 
@@ -7,6 +8,8 @@ import pandas as pd
 
 from f1_predictor.features.groups import retirement_mask
 from f1_predictor.paths import OUTPUT_DIR, RAW_DIR, ROOT
+
+log = logging.getLogger(__name__)
 
 # Minimum aantal races van een coureur op een circuit voor de bias-tabel; minder is vooral ruis.
 MIN_DRIVER_CIRCUIT_RACES = 3
@@ -391,10 +394,13 @@ def write_phase4_outputs(
 def main() -> None:
     df = load_all_results()
     outputs = write_phase4_outputs(df)
-    print("Phase 4 exploration complete.")
+    log.info("Fase 4-verkenning klaar")
     for name, path in outputs.items():
-        print(f"- {name}: {path}")
+        log.info("- %s: %s", name, path)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     main()

@@ -1,3 +1,5 @@
+from datetime import date
+
 import pandas as pd
 
 from f1_predictor.data import fetch as fetch_module
@@ -99,6 +101,18 @@ def test_build_season_table_merges_and_handles_missing():
     assert df.loc[df.driver_id == "driver_b", "quali_position"].isna().all()
     assert (df["sprint_points"] == 0.0).all()
     assert str(df["quali_position"].dtype) == "Int64"
+
+
+def test_fetch_seasons_skips_current_season_without_results(tmp_path, monkeypatch):
+    # Vóór de eerste race van het jaar heeft het lopende seizoen nog geen uitslagen.
+    monkeypatch.setattr(fetch_module, "RAW_DIR", tmp_path)
+    this_year = date.today().year
+    client = FakeClient({})
+
+    assert fetch_seasons(this_year, this_year, client=client) == []
+    # Een afgelopen seizoen zonder uitslagen blijft een fout.
+    assert fetch_seasons(this_year - 1, this_year - 1, client=client) == [this_year - 1]
+    assert not list(tmp_path.iterdir())
 
 
 def test_fetch_seasons_continues_after_failure(tmp_path, monkeypatch):

@@ -14,6 +14,8 @@ the Jolpica-F1 API (Ergast-compatible). Personal hobby project, built phase by p
 - Feature definitions, leakage tests and the experiment log: `docs/features.md`.
 - Model variants, tuning protocol (validation 2015–2021, holdout 2022+) and results:
   `docs/model.md`.
+- CLI commands, `config/config.yaml` fields, output files and the JSON contract for a website:
+  `docs/usage.md`.
 
 ## Language
 
@@ -27,22 +29,27 @@ uv sync --locked                 # install
 uv run pytest                    # tests (offline, synthetic data)
 uv run ruff check .              # lint
 uv run ruff format --check .     # format check (CI runs all three)
-uv run f1 fetch --start 2014 --end 2026   # fetch data -> data/raw/results_{season}.parquet
+uv run f1 fetch                           # data -> data/raw/results_{season}.parquet (config: data)
 uv run f1 features                        # feature table -> data/processed/features.parquet
+uv run f1 backtest --suite baselines      # phase 5 -> output/backtest_baselines.csv
+uv run f1 backtest --suite features       # phase 6 -> output/backtest_features.csv
+uv run f1 tune                            # phase 7 grid on validation seasons -> output/model_tuning.csv (~45 min)
+uv run f1 backtest                        # baselines + model.tuned -> backtest_models.csv, model_comparison.csv/.json
+uv run f1 train                           # model.final -> output/models/ + output/model_feature_importance.csv
+uv run f1 predict --season 2026 --round 22   # after qualifying -> output/predictions/2026-22.json + latest.json
 uv run python -m f1_predictor.evaluation.explore   # phase 4 report -> output/ + docs/phase4_exploration.md
-uv run python -c "from f1_predictor.evaluation.backtest import run_baseline_backtest; run_baseline_backtest()"
-uv run python -c "from f1_predictor.evaluation.backtest import run_feature_backtest; run_feature_backtest()"
-uv run python -c "from f1_predictor.evaluation.model_selection import run_model_tuning; run_model_tuning()"     # ~45 min
-uv run python -c "from f1_predictor.evaluation.model_selection import run_model_backtest; run_model_backtest()"
-uv run python -c "from f1_predictor.models.train import train_final_model; train_final_model()"
 ```
+
+Every `f1` command reads `config/config.yaml` (`--config PATH` for another file). Library functions
+take explicit arguments; only the CLI reads the config.
 
 Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
 
 ## Layout
 
 - `src/f1_predictor/data/` – `jolpica.py` (paged, cached, retrying client), `parse.py` (API JSON ->
-  rows), `fetch.py` (per-season table, atomic parquet write).
+  rows), `fetch.py` (per-season table, atomic parquet write; `fetch_race_entry` gets the
+  qualifying entry list of one race, uncached, for `predict`).
 - `src/f1_predictor/models/baselines.py` – `RacePredictor` protocol: `fit(train_df) -> self`,
   `predict(race_df) -> pd.Series` of unique ranks 1..n with the same index as `race_df`.
   Every future model must implement this interface. `models/linear.py` – `RidgeFeaturePredictor`
@@ -50,20 +57,29 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
   `XGBRankerPredictor` (`rank:pairwise`, one group per race), `XGBNDCGRankerPredictor`
   (`rank:ndcg`), `DEFAULT_XGB_PARAMS`.
   `models/common.py` – shared feature-input checks. `models/train.py` – `ModelSpec`
-  (family + feature set + params), `TUNED_MODELS`/`FINAL_MODEL` (the phase 7 choice),
-  `train_final_model` (joblib + metadata JSON in git-ignored `output/models/`).
+  (family + feature set + params, rejects unknown params and `subsample`), `train_final_model`
+  (joblib + metadata JSON with git commit in git-ignored `output/models/`).
+  `models/predict.py` – `predict_race` (retrains `model.final` on all races before the target
+  race, so it equals that race's backtest fold; upcoming races get their field from live
+  qualifying), `write_prediction` (JSON + `latest.json`).
 - `src/f1_predictor/evaluation/` – `metrics.py` (`score_race`), `backtest.py` (`run_backtest`,
   walk-forward over `(season, round)`; `run_feature_backtest` for cumulative feature groups),
   `model_selection.py` (`summarize_backtest` with paired ΔMAE, tuning grid, `run_model_tuning`
-  on validation seasons only, `run_model_backtest`), `explore.py` (phase 4 analysis + report).
+  on validation seasons only, `run_model_backtest`, `write_comparison_json`), `explore.py`
+  (phase 4 analysis + report).
 - `src/f1_predictor/features/` – `groups.py` (one function per feature group, plus the shared
   `retirement_mask`), `build.py` (`FeatureConfig`, `build_features`, `feature_columns`,
   `write_feature_table`). Models read only `feature_columns(config)`; the leakage tests in
   `tests/test_features.py` run with all groups enabled, so new groups are covered.
-- `src/f1_predictor/paths.py` – all paths (`RAW_DIR`, `CACHE_DIR`, `PROCESSED_DIR`, `OUTPUT_DIR`).
-  Use these instead of relative paths.
-- `config/` – empty; `config.yaml` arrives in phase 8 and will be loaded into `FeatureConfig`.
-- `data/` is git-ignored; `output/` CSVs are committed on purpose.
+- `src/f1_predictor/config.py` – `load_config` -> `ProjectConfig` (data, features as
+  `FeatureConfig`, model with `tuned` per family and `final`, backtest); unknown keys are
+  rejected. `config/config.yaml` holds the phase 7 choice. `cli.py` – Typer commands.
+- `src/f1_predictor/runinfo.py` (git commit/dirty, versions, config for the `run` block) and
+  `output.py` (atomic writes, `write_json` with NaN -> null). Bump `schema_version` when a JSON
+  field is removed or renamed (contract in `docs/usage.md`).
+- `src/f1_predictor/paths.py` – all paths (`CONFIG_PATH`, `RAW_DIR`, `CACHE_DIR`,
+  `PROCESSED_DIR`, `OUTPUT_DIR`, `PREDICTIONS_DIR`). Use these instead of relative paths.
+- `data/` is git-ignored; `output/` CSVs and JSON are committed on purpose.
 
 ## Domain rules that are easy to get wrong
 
@@ -82,8 +98,10 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
 - Hyperparameters and model choice are made on validation races (≤ 2021) only; the holdout
   (≥ 2022) is for reporting. Don't tune on holdout scores. Rules: hyperparameters per family by
   lowest validation MAE; final model by highest validation podium overlap (tie: winner hit
-  rate, then MAE), see `select_final_model`. XGBoost models use no `subsample`:
-  row sampling depends on the thread count and breaks reproducibility across machines.
+  rate, then MAE), see `select_final_model`. The choice lives in `config/config.yaml`;
+  `test_configured_models_follow_from_the_selection_rules` checks it against
+  `output/model_tuning.csv`. XGBoost models use no `subsample`: row sampling depends on the
+  thread count and breaks reproducibility across machines.
 
 ## Git
 

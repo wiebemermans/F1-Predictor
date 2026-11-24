@@ -1,0 +1,334 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-24T20:49:52+00:00",
+  "final_model": "xgb_ranker_d2_n50_all",
+  "reference": "qualifying_position",
+  "periods": {
+    "validation": [
+      {
+        "model": "qualifying_position",
+        "family": "baseline",
+        "races": 140,
+        "mae_positions": 3.6213636363636366,
+        "spearman": 0.621816568524643,
+        "winner_hit": 0.5357142857142857,
+        "podium_overlap": 2.1,
+        "top10_overlap": 7.535714285714286,
+        "delta_mae": 0.0,
+        "delta_mae_se": 0.0,
+        "better_share": 0.0,
+        "worse_share": 0.0
+      },
+      {
+        "model": "championship_points",
+        "family": "baseline",
+        "races": 140,
+        "mae_positions": 4.034999999999999,
+        "spearman": 0.5524369648004822,
+        "winner_hit": 0.38571428571428573,
+        "podium_overlap": 1.8642857142857143,
+        "top10_overlap": 7.114285714285714,
+        "delta_mae": 0.41363636363636364,
+        "delta_mae_se": 0.08722247864369405,
+        "better_share": 0.3357142857142857,
+        "worse_share": 0.6285714285714286
+      },
+      {
+        "model": "ridge_a10_upto_championship",
+        "family": "ridge",
+        "races": 140,
+        "mae_positions": 3.573506493506493,
+        "spearman": 0.6367293869909104,
+        "winner_hit": 0.4928571428571429,
+        "podium_overlap": 2.085714285714286,
+        "top10_overlap": 7.7,
+        "delta_mae": -0.04785714285714288,
+        "delta_mae_se": 0.03600974798990875,
+        "better_share": 0.4928571428571429,
+        "worse_share": 0.4
+      },
+      {
+        "model": "xgb_regressor_d2_n100_all",
+        "family": "xgb_regressor",
+        "races": 140,
+        "mae_positions": 3.5624025974025977,
+        "spearman": 0.6388743881159703,
+        "winner_hit": 0.5071428571428571,
+        "podium_overlap": 2.0285714285714285,
+        "top10_overlap": 7.7,
+        "delta_mae": -0.05896103896103894,
+        "delta_mae_se": 0.04272595926685652,
+        "better_share": 0.4785714285714286,
+        "worse_share": 0.45
+      },
+      {
+        "model": "xgb_ranker_d2_n50_all",
+        "family": "xgb_ranker",
+        "races": 140,
+        "mae_positions": 3.5333766233766233,
+        "spearman": 0.6431737304865778,
+        "winner_hit": 0.5357142857142857,
+        "podium_overlap": 2.085714285714286,
+        "top10_overlap": 7.692857142857143,
+        "delta_mae": -0.08798701298701297,
+        "delta_mae_se": 0.03698619969866438,
+        "better_share": 0.5,
+        "worse_share": 0.42142857142857143
+      },
+      {
+        "model": "xgb_ranker_ndcg_d1_n300_all",
+        "family": "xgb_ranker_ndcg",
+        "races": 140,
+        "mae_positions": 3.576818181818182,
+        "spearman": 0.633089075030886,
+        "winner_hit": 0.5285714285714286,
+        "podium_overlap": 2.0714285714285716,
+        "top10_overlap": 7.607142857142857,
+        "delta_mae": -0.04454545454545455,
+        "delta_mae_se": 0.045905665721442675,
+        "better_share": 0.5285714285714286,
+        "worse_share": 0.42142857142857143
+      }
+    ],
+    "holdout": [
+      {
+        "model": "qualifying_position",
+        "family": "baseline",
+        "races": 113,
+        "mae_positions": 3.3879747639412288,
+        "spearman": 0.6551808707820129,
+        "winner_hit": 0.5929203539823009,
+        "podium_overlap": 1.9292035398230087,
+        "top10_overlap": 7.787610619469026,
+        "delta_mae": 0.0,
+        "delta_mae_se": 0.0,
+        "better_share": 0.0,
+        "worse_share": 0.0
+      },
+      {
+        "model": "championship_points",
+        "family": "baseline",
+        "races": 113,
+        "mae_positions": 3.9707117754160137,
+        "spearman": 0.5726816867275747,
+        "winner_hit": 0.4424778761061947,
+        "podium_overlap": 1.6371681415929205,
+        "top10_overlap": 7.451327433628318,
+        "delta_mae": 0.582737011474785,
+        "delta_mae_se": 0.10471910703102276,
+        "better_share": 0.2743362831858407,
+        "worse_share": 0.6902654867256637
+      },
+      {
+        "model": "ridge_a10_upto_championship",
+        "family": "ridge",
+        "races": 113,
+        "mae_positions": 3.259740864631409,
+        "spearman": 0.6803765508773507,
+        "winner_hit": 0.584070796460177,
+        "podium_overlap": 1.991150442477876,
+        "top10_overlap": 7.920353982300885,
+        "delta_mae": -0.1282338993098192,
+        "delta_mae_se": 0.04699113081739989,
+        "better_share": 0.504424778761062,
+        "worse_share": 0.37168141592920356
+      },
+      {
+        "model": "xgb_regressor_d2_n100_all",
+        "family": "xgb_regressor",
+        "races": 113,
+        "mae_positions": 3.3002667569970785,
+        "spearman": 0.6743372212054499,
+        "winner_hit": 0.5221238938053098,
+        "podium_overlap": 2.0353982300884956,
+        "top10_overlap": 7.884955752212389,
+        "delta_mae": -0.08770800694415037,
+        "delta_mae_se": 0.04959212523193566,
+        "better_share": 0.504424778761062,
+        "worse_share": 0.4424778761061947
+      },
+      {
+        "model": "xgb_ranker_d2_n50_all",
+        "family": "xgb_ranker",
+        "races": 113,
+        "mae_positions": 3.3061819875513403,
+        "spearman": 0.6718903663720495,
+        "winner_hit": 0.5398230088495575,
+        "podium_overlap": 2.017699115044248,
+        "top10_overlap": 7.876106194690266,
+        "delta_mae": -0.08179277638988865,
+        "delta_mae_se": 0.050993181758675184,
+        "better_share": 0.49557522123893805,
+        "worse_share": 0.40707964601769914
+      },
+      {
+        "model": "xgb_ranker_ndcg_d1_n300_all",
+        "family": "xgb_ranker_ndcg",
+        "races": 113,
+        "mae_positions": 3.381348181394758,
+        "spearman": 0.6595368848158383,
+        "winner_hit": 0.584070796460177,
+        "podium_overlap": 2.0353982300884956,
+        "top10_overlap": 7.84070796460177,
+        "delta_mae": -0.0066265825464707565,
+        "delta_mae_se": 0.06032031845385568,
+        "better_share": 0.48672566371681414,
+        "worse_share": 0.4690265486725664
+      }
+    ],
+    "all": [
+      {
+        "model": "qualifying_position",
+        "family": "baseline",
+        "races": 253,
+        "mae_positions": 3.5171227565860397,
+        "spearman": 0.6367184110348517,
+        "winner_hit": 0.5612648221343873,
+        "podium_overlap": 2.0237154150197627,
+        "top10_overlap": 7.648221343873518,
+        "delta_mae": 0.0,
+        "delta_mae_se": 0.0,
+        "better_share": 0.0,
+        "worse_share": 0.0
+      },
+      {
+        "model": "championship_points",
+        "family": "baseline",
+        "races": 253,
+        "mae_positions": 4.006286287043516,
+        "spearman": 0.5614790738034918,
+        "winner_hit": 0.41106719367588934,
+        "podium_overlap": 1.7628458498023716,
+        "top10_overlap": 7.264822134387352,
+        "delta_mae": 0.4891635304574768,
+        "delta_mae_se": 0.06728280990190158,
+        "better_share": 0.308300395256917,
+        "worse_share": 0.6561264822134387
+      },
+      {
+        "model": "ridge_a10_upto_championship",
+        "family": "ridge",
+        "races": 253,
+        "mae_positions": 3.433366113811298,
+        "spearman": 0.6562239700706248,
+        "winner_hit": 0.5335968379446641,
+        "podium_overlap": 2.0434782608695654,
+        "top10_overlap": 7.798418972332016,
+        "delta_mae": -0.0837566427747414,
+        "delta_mae_se": 0.028990681070444457,
+        "better_share": 0.4980237154150198,
+        "worse_share": 0.38735177865612647
+      },
+      {
+        "model": "xgb_regressor_d2_n100_all",
+        "family": "xgb_regressor",
+        "races": 253,
+        "mae_positions": 3.445322162755073,
+        "spearman": 0.6547135191005995,
+        "winner_hit": 0.5138339920948617,
+        "podium_overlap": 2.0316205533596836,
+        "top10_overlap": 7.782608695652174,
+        "delta_mae": -0.0718005938309662,
+        "delta_mae_se": 0.03234511776139524,
+        "better_share": 0.4901185770750988,
+        "worse_share": 0.44664031620553357
+      },
+      {
+        "model": "xgb_ranker_d2_n50_all",
+        "family": "xgb_ranker",
+        "races": 253,
+        "mae_positions": 3.4319023393914176,
+        "spearman": 0.655999737818824,
+        "winner_hit": 0.5375494071146245,
+        "podium_overlap": 2.0553359683794468,
+        "top10_overlap": 7.774703557312253,
+        "delta_mae": -0.08522041719462146,
+        "delta_mae_se": 0.03055746683351119,
+        "better_share": 0.4980237154150198,
+        "worse_share": 0.4150197628458498
+      },
+      {
+        "model": "xgb_ranker_ndcg_d1_n300_all",
+        "family": "xgb_ranker_ndcg",
+        "races": 253,
+        "mae_positions": 3.489513399020368,
+        "spearman": 0.6449017331561808,
+        "winner_hit": 0.5533596837944664,
+        "podium_overlap": 2.0553359683794468,
+        "top10_overlap": 7.711462450592886,
+        "delta_mae": -0.027609357565671275,
+        "delta_mae_se": 0.03697157859481992,
+        "better_share": 0.5098814229249012,
+        "worse_share": 0.4426877470355731
+      }
+    ]
+  },
+  "run": {
+    "git_commit": "a4ca21eddf94b08aede9537800ef167e60abf455",
+    "git_dirty": false,
+    "package_version": "0.1.0",
+    "versions": {
+      "python": "3.13.14",
+      "xgboost": "3.4.1",
+      "scikit-learn": "1.9.1",
+      "pandas": "3.0.6"
+    },
+    "config": {
+      "data": {
+        "start_season": 2014,
+        "end_season": null
+      },
+      "features": {
+        "groups": [
+          "starting_position",
+          "driver_form",
+          "team_form",
+          "championship",
+          "circuit_history",
+          "teammate"
+        ],
+        "form_windows": [
+          3,
+          5
+        ],
+        "rate_window": 10,
+        "circuit_shrinkage": 3.0
+      },
+      "model": {
+        "final": "xgb_ranker",
+        "tuned": {
+          "ridge": {
+            "feature_set": "upto_championship",
+            "params": {
+              "alpha": 10.0
+            }
+          },
+          "xgb_regressor": {
+            "feature_set": "all",
+            "params": {
+              "max_depth": 2,
+              "n_estimators": 100
+            }
+          },
+          "xgb_ranker": {
+            "feature_set": "all",
+            "params": {
+              "max_depth": 2,
+              "n_estimators": 50
+            }
+          },
+          "xgb_ranker_ndcg": {
+            "feature_set": "all",
+            "params": {
+              "max_depth": 1,
+              "n_estimators": 300
+            }
+          }
+        }
+      },
+      "backtest": {
+        "min_train_races": 20
+      }
+    }
+  }
+}

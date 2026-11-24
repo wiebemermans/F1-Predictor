@@ -233,7 +233,7 @@ df["driver_form_5"] = df.groupby("driver")["finish_position"].transform(
 
 **Praktisch**
 
-- [x] Elke featuregroep in een eigen functie in `features/`, aan/uit te zetten via de config (`FeatureConfig`; `config.yaml` volgt in fase 8)
+- [x] Elke featuregroep in een eigen functie in `features/`, aan/uit te zetten via de config (`FeatureConfig`, ingelezen uit `config/config.yaml`)
 - [x] Leakage-test in pytest: wijzig de uitslag van race N kunstmatig en controleer dat de features van race N niet veranderen
 - [x] Experimentenlogboek bijhouden (feature, backtestscore, conclusie); scores in `output/backtest_features.csv`
 - [x] CLI-commando `f1 features` dat een tabel bouwt in `data/processed/`
@@ -251,7 +251,6 @@ df["driver_form_5"] = df.groupby("driver")["finish_position"].transform(
 - [x] Daarna gradient boosting:
   - Regressie (`XGBRegressor`): voorspel de finishpositie en sorteer
   - Learning-to-rank (`XGBRanker`, `rank:pairwise`): groepeer per race, label = `n_coureurs - finishpositie`
-  - Extra: `rank:ndcg` (weegt de top zwaarder) voor het winnaarsprobleem; voorspelt de winnaar niet beter dan de polesitter
 - [x] Model achter dezelfde `fit`/`predict`-interface als de baselines
 - [x] Conservatieve hyperparameters (`max_depth` 3-4, lage `learning_rate`, weinig `n_estimators`); tune met tijdsgebaseerde validatie, niet met een willekeurige split (getuned op 2015–2021, gerapporteerd op de holdout 2022–2026; de beste bomen bleken nog ondieper: diepte 2)
 - [x] Model opslaan (`joblib` of `save_model`) in `output/models/` (niet in git; opnieuw te bouwen met `train_final_model`)
@@ -266,7 +265,8 @@ df["driver_form_5"] = df.groupby("driver")["finish_position"].transform(
 
 **Doel:** het project bruikbaar maken zonder code aan te passen.
 
-`config/config.yaml`:
+Oorspronkelijke schets van `config/config.yaml` (de uiteindelijke velden staan in
+[`docs/usage.md`](docs/usage.md)):
 
 ```yaml
 data:
@@ -282,12 +282,14 @@ backtest:
   min_train_races: 20
 ```
 
-- [ ] Config laden in één module (`dataclasses` of `pydantic`)
-- [ ] Typer-commando's: `f1 fetch`, `f1 features`, `f1 backtest`, `f1 predict --season 2026 --round 10`
-- [ ] Outputs als JSON in `output/` (rechtstreeks inleesbaar door de website)
-- [ ] `logging` in plaats van `print`
-- [ ] Vaste random seeds; sla config en commit-hash mee op bij elke run
-- [ ] **Documentatie bijwerken:** documenteer configuratievelden met defaults en toegestane waarden, CLI-commando's met voorbeelden, outputbestanden en veelvoorkomende fouten (README of `docs/usage.md`).
+- [x] Config laden in één module (`dataclasses`, geen extra dependency): `config.py` met validatie die onbekende sleutels weigert; de modelkeuze uit fase 7 staat nu in `config.yaml`
+- [x] Typer-commando's: `f1 fetch`, `f1 features`, `f1 backtest`, `f1 predict --season 2026 --round 10`, plus `f1 tune` en `f1 train` (vervangen de `python -c`-aanroepen); `f1 predict` traint het eindmodel telkens opnieuw op alle races vóór de gevraagde race
+- [x] Outputs als JSON in `output/` (rechtstreeks inleesbaar door de website): `output/predictions/{seizoen}-{ronde}.json` met `latest.json`, en `output/model_comparison.json`
+  - Behandel het JSON-formaat als een vast contract: `schema_version`, `generated_at`, modelnaam, race-info (seizoen, ronde, naam), voorspelde volgorde en de backtestsamenvatting (`summarize_backtest`)
+  - Documenteer het formaat (in [`docs/usage.md`](docs/usage.md#json-formaat-contract-voor-een-website)), zodat elke latere site (GitHub Pages of een eigen persoonlijke website) alleen van dit formaat afhangt en niet van de Python-code
+- [x] `logging` in plaats van `print`
+- [x] Vaste random seeds (`random_state=0`, geen `subsample`); sla config en commit-hash mee op bij elke run (`run`-blok in elke JSON, git-info in de modelmetadata)
+- [x] **Documentatie bijgewerkt:** configuratievelden met defaults en toegestane waarden, CLI-commando's met voorbeelden, outputbestanden, het JSON-formaat en veelvoorkomende fouten staan in [`docs/usage.md`](docs/usage.md); README, `CLAUDE.md` en de fasedocumenten gebruiken de CLI.
 
 **Klaar wanneer:** een vreemde kan je repo clonen en met vier commando's tot een voorspelling komen.
 
@@ -313,6 +315,7 @@ backtest:
 - [ ] Tweede workflow na de race (maandag): echte uitslag ophalen, backtest bijwerken, voorspelling vs. realiteit vergelijken
 - [ ] Dependencies en FastF1-cache cachen in Actions
 - [ ] Onthoud: geplande workflows kunnen vertraagd of overgeslagen worden en worden na 60 dagen inactiviteit uitgeschakeld
+- [ ] Houd de berekening hier, ook als er later een eigen (thuis)server is: die server haalt dan alleen de nieuwste JSON op (`git pull` of raw-URL) en hoeft geen Python/ML te draaien. Alternatief: dezelfde CLI via cron op de server (`uv run f1 predict`)
 - [ ] **Documentatie bijwerken:** leg triggers, planning, benodigde secrets/rechten, gegenereerde artefacten en handmatig opnieuw uitvoeren/troubleshooten vast (bijvoorbeeld in `docs/automation.md`).
 
 ---
@@ -322,9 +325,10 @@ backtest:
 **Doel:** resultaten zichtbaar maken.
 
 - [ ] Eén statische `index.html` die JSON uit `output/` inlaadt via `fetch`
+- [ ] Draagbaar houden: relatieve paden, de data-URL in één variabele, niets dat alleen op GitHub Pages werkt. Zo kan dezelfde pagina later ongewijzigd op een eigen persoonlijke website draaien (bv. `voornaamachternaam.be/projects/f1` op een thuisserver) of daarin worden opgenomen
 - [ ] Tonen: voorspelde uitslag volgende race, backtesttabel (model vs. baselines), korte uitleg + beperkingen
 - [ ] Publiceren via Settings → Pages
-- [ ] Optioneel: grafieken (Chart.js/Plotly) of een Streamlit-app (heeft hosting nodig)
+- [ ] Optioneel: grafieken (Chart.js/Plotly). Liever geen Streamlit-app: die vereist een permanent draaiende Python-server, wat op een thuisserver meer onderhoud en beveiliging vraagt en moeilijker in een persoonlijke site past
 - [ ] **Documentatie bijwerken:** beschrijf het dataformaat dat de site inleest, lokaal testen en publiceren via Pages, plus de betekenis en actualiteit van getoonde voorspellingen (bijvoorbeeld in `docs/website.md`).
 
 ---

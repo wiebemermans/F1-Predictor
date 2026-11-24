@@ -58,7 +58,7 @@ verreden. Beide baselines gebruiken identieke test-races.
 Genereer de CSV vanuit de beschikbare parquet-bestanden:
 
 ```powershell
-uv run python -c "from f1_predictor.evaluation.backtest import run_baseline_backtest; run_baseline_backtest()"
+uv run f1 backtest --suite baselines
 ```
 
 De output is `output/backtest_baselines.csv`, met één rij per baseline en

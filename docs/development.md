@@ -24,18 +24,24 @@ De importnaam is `f1_predictor`; de installeerbare CLI heet `f1`.
 
 ## Projectindeling
 
+- `config/config.yaml`: projectconfiguratie (seizoenen, features, gekozen modellen, backtest);
+  velden en commando's staan in [usage.md](usage.md).
+- `src/f1_predictor/cli.py`: de commando's `f1 fetch`, `features`, `backtest`, `tune`, `train`
+  en `predict`; `config.py` leest en valideert de configuratie.
 - `src/f1_predictor/data/`: Jolpica-client, parsing en seizoensbestanden.
 - `src/f1_predictor/features/`: featuregroepen (`groups.py`) en de featuretabel met
   `FeatureConfig` (`build.py`).
 - `src/f1_predictor/models/`: voorspellers (baselines, Ridge, XGBoost-regressie en -ranker),
-  modelspecificaties en het trainen van het eindmodel.
+  modelspecificaties, het trainen van het eindmodel en het voorspellen van één race.
 - `src/f1_predictor/evaluation/`: data-exploratie, metrics, backtests en modelselectie.
 - `tests/`: offline tests met synthetische data.
 - `notebooks/`: API-verkenning en experimenten.
 - `data/raw/` en `data/processed/`: lokale parquet-data (ruw en featuretabel); deze wordt
   niet in Git bijgehouden.
-- `output/`: reproduceerbare rapporten en backtestresultaten; `output/models/` (getrainde
-  modellen) staat niet in git.
+- `src/f1_predictor/runinfo.py` en `output.py`: herkomst van een run (git-commit, versies,
+  configuratie) en het atomisch wegschrijven van CSV- en JSON-uitvoer.
+- `output/`: reproduceerbare rapporten, backtestresultaten en voorspellingen
+  (`output/predictions/`); `output/models/` (getrainde modellen) staat niet in git.
 - `docs/`: dataschema, methode en faseverslagen.
 
 ## Kwaliteitscontroles
