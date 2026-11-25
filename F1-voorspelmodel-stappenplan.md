@@ -23,31 +23,46 @@ Persoonlijk project om de uitkomst van F1-races te voorspellen. Vink de taken af
 | 6 | Feature engineering | 2 weekends |
 | 7 | Het model | 1-2 weekends |
 | 8-9 | Config, CLI, tests | 1-2 weekends |
-| 10-11 | Automatisering + website | 2 weekends |
-| 12 | Afwerking | 1 weekend |
+| 10 | Automatisering | 1 weekend |
+| 11 | Opruimen en herorganiseren | 1 weekend |
+| 12 | Uitbreidingen: kansen en Elo | 2-3 weekends |
+| 13 | Website (draagbare F1-pagina) | 1-2 weekends |
+| 14 | Afwerking en release | 1 weekend |
+| – | Backlog (optionele ideeën) | – |
 
-Reken op ongeveer 2-3 maanden als hobbyproject.
+Reken op ongeveer 3-4 maanden als hobbyproject.
+
+**Waarom deze volgorde:** de website komt bewust laat. Eerst wordt de repo opgeruimd (fase 11),
+daarna komen er uitbreidingen die iets opleveren om te tonen (fase 12). Pas dan wordt de pagina
+gebouwd, op een moment dat er genoeg inhoud is en de paden van de uitvoer vastliggen.
 
 ## Doelstructuur van de repo
+
+Zo ziet de repo eruit na fase 11 (opruimen). De website uit fase 13 komt er later bij.
 
 ```
 f1-predictor/
 ├── .github/workflows/
-│   ├── ci.yml              # tests + linting bij elke push
-│   ├── predict.yml         # geplande run vóór elke race
+│   ├── ci.yml              # tests + linting bij elke push en pull request
+│   ├── predict.yml         # elke 3 uur vr-zo: data ophalen + volgende race voorspellen
 │   └── post-race.yml       # na de race: uitslag, backtests, voorspelling vs. realiteit
 ├── config/
-│   └── config.yaml         # seizoenen, features, hyperparameters
+│   └── config.yaml         # seizoenen, features, gekozen modellen, backtest
 ├── src/f1_predictor/
-│   ├── data/               # ophalen + cachen van data
+│   ├── data/               # ophalen, cachen en inladen van data, racekalender
 │   ├── features/           # feature engineering
-│   ├── models/             # training, predict, baselines
-│   ├── evaluation/         # backtest + metrics
-│   └── cli.py              # `f1 fetch`, `f1 train`, `f1 predict`
+│   ├── models/             # baselines, modellen, training, voorspellen
+│   ├── evaluation/         # metrics, backtests, modelselectie, historiek, verkenning
+│   └── cli.py              # `f1 fetch`, `features`, `backtest`, `tune`, `train`, `predict`, `evaluate`
 ├── tests/
-├── notebooks/              # exploratie, geen productiecode
 ├── data/                   # in .gitignore (raw/processed)
-├── output/                 # voorspellingen als JSON/CSV
+├── output/
+│   ├── predictions/        # JSON per race + latest.json (contract voor de website)
+│   ├── backtests/          # CSV's van backtests en tuning
+│   ├── exploration/        # CSV's van de dataverkenning
+│   ├── model_comparison.json
+│   └── prediction_history.json
+├── docs/                   # documentatie per onderwerp
 ├── pyproject.toml
 ├── README.md
 └── .gitignore
@@ -86,7 +101,7 @@ f1-predictor/
   cd f1-predictor
   uv add requests requests-cache pandas numpy pyarrow scikit-learn xgboost pyyaml typer
   uv add --dev pytest ruff pre-commit jupyter
-  # Optioneel, pas in fase 13 (weer, rondetijden, telemetrie):
+  # Optioneel, pas bij een uitbreiding uit de backlog (weer, rondetijden, telemetrie):
   # uv add --optional enrich fastf1
   ```
 
@@ -230,7 +245,7 @@ df["driver_form_5"] = df.groupby("driver")["finish_position"].transform(
 - [x] Kampioenschapspositie vóór de race
 - [x] Circuit-historiek van de coureur (met shrinkage naar het gemiddelde bij weinig data)
 - [x] Teamgenoot-vergelijking
-- [ ] Later: weer, bandenstrategie, rondetijden uit trainingen (FP2-longruns)
+- [ ] Later: weer, bandenstrategie, rondetijden uit trainingen (FP2-longruns); zie de backlog
 
 **Praktisch**
 
@@ -321,40 +336,137 @@ backtest:
 
 ---
 
-## Fase 11: Website via GitHub Pages (±1-2 weekends)
+## Fase 11: Opruimen en herorganiseren (±1 weekend)
 
-**Doel:** resultaten zichtbaar maken.
+**Doel:** een opgeruimde repo met een logische indeling, vóór er nieuwe functionaliteit bijkomt.
+Na deze fase werkt alles nog zoals voorheen; alleen de structuur en documentatie veranderen.
 
-- [ ] Eén statische `index.html` die JSON uit `output/` inlaadt via `fetch`
-- [ ] Draagbaar houden: relatieve paden, de data-URL in één variabele, niets dat alleen op GitHub Pages werkt. Zo kan dezelfde pagina later ongewijzigd op een eigen persoonlijke website draaien (bv. `voornaamachternaam.be/projects/f1` op een thuisserver) of daarin worden opgenomen
-- [ ] Tonen: voorspelde uitslag volgende race, backtesttabel (model vs. baselines), korte uitleg + beperkingen
-- [ ] Publiceren via Settings → Pages
-- [ ] Optioneel: grafieken (Chart.js/Plotly). Liever geen Streamlit-app: die vereist een permanent draaiende Python-server, wat op een thuisserver meer onderhoud en beveiliging vraagt en moeilijker in een persoonlijke site past
-- [ ] **Documentatie bijwerken:** beschrijf het dataformaat dat de site inleest, lokaal testen en publiceren via Pages, plus de betekenis en actualiteit van getoonde voorspellingen (bijvoorbeeld in `docs/website.md`).
+**Timing:** de bot commit tijdens raceweekenden naar `output/`. Herindelen van `output/` gebeurt
+pas na de laatste race van 2026 (6 december), en altijd na een `git pull`.
+
+**Repo-hygiëne**
+
+- [ ] Branches die al in `main` gemerged zijn verwijderen (lokaal en op `origin`); op GitHub "Automatically delete head branches" aanzetten
+- [ ] `notebooks/` verwijderen (de bevindingen staan in [`docs/data_schema.md`](docs/data_schema.md)) en de dev-dependency `jupyter` schrappen
+- [ ] `.gitignore` inkorten tot de regels die voor dit project gelden (nu ~200 regels GitHub-template)
+- [ ] `tests/test_smoke.py` verwijderen (elke andere test importeert het pakket al)
+
+**Codestructuur**
+
+- [ ] `load_all_results` van `evaluation/explore.py` naar `data/` verplaatsen: `features/` en `models/` mogen niet afhangen van het verkenningsrapport
+- [ ] Kalenderlogica (`next_race`, `race_to_predict`) uit `models/predict.py` in een eigen module zetten, met de bijbehorende tests apart
+- [ ] Eenmalig controleren op ongebruikte code en dependencies (bv. `uvx vulture`, `uvx deptry`); geen nieuwe dependency toevoegen
+
+**Map `output/`**
+
+- [ ] CSV's groeperen: `output/exploration/` (verkenning, nu `phase4_*.csv`) en `output/backtests/` (backtests, tuning, modelvergelijking, feature importance)
+- [ ] De JSON voor de website blijft bovenaan: `predictions/`, `model_comparison.json`, `prediction_history.json`
+- [ ] `paths.py`, workflows, tests (`test_workflows.py`, de repo-snapshotcontrole in `test_pipeline.py`) en docs aanpassen; oude bestanden verwijderen
+- [ ] Na de verplaatsing beide automatiseringsworkflows één keer handmatig draaien (`workflow_dispatch`) en controleren dat ze niets onverwachts committen
+
+**Documentatie**
+
+- [ ] Docs per onderwerp in plaats van per fase: bv. `phase4_exploration.md` → `exploration.md`, `phase5_baselines.md` → `baselines.md`; README-links zonder fasenummers
+- [ ] Eén plek voor de actuele resultaten (model vs. baselines); andere docs linken ernaar in plaats van getallen te herhalen
+- [ ] Dubbele uitleg wegwerken (bv. projectindeling in `CLAUDE.md` en `docs/development.md`)
+- [ ] `.github/agent-instructions.md` en `CLAUDE.md` op elkaar afstemmen (o.a. de Copilot-co-auteursregel)
+- [ ] Release/tag `v0.1.0`: mijlpaal "de pipeline werkt van data tot automatische voorspelling"
+- [ ] **Documentatie bijgewerkt:** nieuwe paden, bestandsnamen en indeling staan in README, `CLAUDE.md` en de docs; geen dode links.
+
+**Klaar wanneer:** tests, coverage en Ruff slagen, beide workflows draaien met de nieuwe paden, en
+de README leidt een nieuwe lezer zonder omwegen naar de juiste docs.
 
 ---
 
-## Fase 12: Afwerking (±1 weekend)
+## Fase 12: Uitbreidingen: kansen en Elo (±2-3 weekends)
 
-- [ ] README: wat het doet, link/screenshot van de site, backtestresultaten, installatie en gebruik, projectstructuur, methodologie, beperkingen
+**Doel:** het project rijker maken met resultaten die het tonen waard zijn, vóór de website
+wordt gebouwd. Elke uitbreiding volgt dezelfde regels als fase 5-7: geen leakage, keuzes op de
+validatieseizoenen (≤ 2021), de holdout (≥ 2022) alleen om te rapporteren.
+
+**Kansen in plaats van één volgorde (Monte-Carlo)**
+
+- [ ] Per race een kansverdeling simuleren: kans op winst, podium en top 10 per coureur (bv. de modelscores verstoren met ruis die gekalibreerd is op backtestfouten, plus uitvalkans uit historische uitval vóór de race)
+- [ ] Vaste seed en vast aantal simulaties, zodat de uitvoer reproduceerbaar is
+- [ ] Kalibratie meten in de walk-forward backtest (bv. Brier-score en een betrouwbaarheidstabel: komt "30% kans" ook ongeveer 30% van de keren uit?)
+- [ ] De kansen toevoegen aan de voorspellings-JSON als nieuwe velden (toevoegen vereist geen nieuwe `schema_version`; contract bijwerken in [`docs/usage.md`](docs/usage.md))
+
+**Elo-rating voor coureurs en teams**
+
+- [ ] Elo-ratings die na elke race worden bijgewerkt (paarsgewijs binnen het veld), met strikt de rating van vóór de race als feature
+- [ ] K-factor en terugval naar het gemiddelde tussen seizoenen kiezen op de validatieseizoenen
+- [ ] Als featuregroep (aan/uit via `FeatureConfig`, gedekt door de leakage-tests) én als losse `RacePredictor` die de contracttest haalt
+- [ ] Meten met `run_backtest` en de feature-backtest; conclusie in het experimentenlogboek, ook als het niets oplevert
+
+**Historiek van voorspellingen**
+
+- [ ] Controleren of `output/prediction_history.json` na de laatste races van 2026 genoeg bevat om te tonen (aantal races, gemiddelde scores vs. de kwalificatiebaseline); zo nodig velden toevoegen die de website nodig heeft
+
+- [ ] **Documentatie bijgewerkt:** methode, kalibratie en beperkingen van de kansen; definitie, parameters en resultaten van Elo; nieuwe JSON-velden in [`docs/usage.md`](docs/usage.md) en de nieuwe tests in [`docs/testing.md`](docs/testing.md).
+
+**Klaar wanneer:** de voorspelling van de volgende race bevat gekalibreerde kansen, Elo is eerlijk
+vergeleken met het bestaande model, en de automatisering levert beide zonder handwerk.
+
+---
+
+## Fase 13: Website: draagbare F1-pagina (±1-2 weekends)
+
+**Doel:** een statische pagina die de F1-predictor uitlegt en de resultaten toont, los van waar
+ze uiteindelijk draait.
+
+**Waar de pagina kan draaien:** de pagina is een zelfstandig onderdeel dat onder een subpad werkt.
+Mogelijke plaatsen, zonder dat de pagina zelf verandert:
+
+- GitHub Pages van deze repo: `<gebruikersnaam>.github.io/F1-Predictor/`. Een latere persoonlijke
+  GitHub Pages-site (`<gebruikersnaam>.github.io`) kan vanaf de hoofdpagina gewoon naar dit
+  subpad linken, en krijgt bij een eigen domein automatisch hetzelfde subpad.
+- Een eigen website op een thuisserver, bv. `voornaamachternaam.be/projects/f1`: de map kopiëren
+  of de JSON periodiek ophalen; de server hoeft geen Python te draaien.
+
+**Bouwen**
+
+- [ ] Statische pagina (HTML, CSS, een beetje JavaScript) in een eigen map, bv. `site/`, zonder build-stap of framework
+- [ ] Draagbaar: alleen relatieve paden, de data-URL in één variabele, niets dat alleen op GitHub Pages werkt; de pagina werkt onder elk subpad
+- [ ] Leest alleen de JSON uit `output/` (contract in [`docs/usage.md`](docs/usage.md)), nooit Python-code of CSV's
+- [ ] Tonen: voorspelling van de volgende race (met kansen uit fase 12), model vs. baselines uit de backtest, historiek van voorspellingen vs. uitslag, Elo-ranglijst
+- [ ] Uitleg in gewone taal: wat het model doet, het voorspelmoment, hoe de backtest werkt, en wat het model niet weet
+- [ ] Toont wanneer de data het laatst is bijgewerkt (`generated_at`) en meldt duidelijk als er nog geen voorspelling is
+- [ ] Grafieken alleen als ze iets toevoegen (bv. Chart.js); geen Streamlit of andere server-app
+
+**Publiceren**
+
+- [ ] Kiezen hoe de JSON bij de pagina komt (bv. een workflow die `site/` en de JSON samen naar Pages deployt, of ophalen via een raw-URL) en die keuze vastleggen
+- [ ] Publiceren via GitHub Pages van deze repo als eerste, werkende versie
+- [ ] Lokaal testen beschrijven (bv. `uv run python -m http.server` vanuit de juiste map)
+- [ ] **Documentatie bijgewerkt:** welke JSON de site inleest, lokaal testen, publiceren via Pages, overzetten naar een andere host, en de betekenis en actualiteit van wat getoond wordt (bv. in `docs/website.md`).
+
+**Klaar wanneer:** de pagina staat online, werkt ook vanuit een andere map of host zonder
+aanpassingen, en wordt na elke race automatisch actueel.
+
+---
+
+## Fase 14: Afwerking en release (±1 weekend)
+
+- [ ] README: wat het doet, link en screenshot van de site, actuele backtestresultaten, installatie en gebruik, projectstructuur, methodologie, beperkingen
 - [ ] Badges (CI-status, Python-versie, licentie)
-- [ ] Beschrijving en topics op GitHub (`formula1`, `machine-learning`, `xgboost`)
-- [ ] Sectie "ideeën voor uitbreiding" of `CONTRIBUTING.md`
-- [ ] Release/tag `v0.1.0`
+- [ ] Beschrijving, website-link en topics op GitHub (`formula1`, `machine-learning`, `xgboost`)
+- [ ] Sectie "ideeën voor uitbreiding" (verwijst naar de backlog) of `CONTRIBUTING.md`
 - [ ] Eerlijk vermelden wat het model niet weet (weer, uitvallers, strategie, gridstraffen na kwalificatie)
+- [ ] Release/tag `v1.0.0`
 - [ ] **Documentatie afronden:** controleer README en docs op kloppende installatie- en gebruiksinstructies, actuele backtestresultaten, methodologie, databronnen, beperkingen en links. Verwijder verouderde of dubbele instructies.
 
 ---
 
-## Fase 13: Uitbreidingen (optioneel)
+## Backlog (optioneel, geen vaste volgorde)
 
-- [ ] Probabilistische voorspellingen (bv. "35% kans op podium") via Monte-Carlo-simulatie
+Ideeën voor later. Wat hiervan wordt opgepakt, krijgt dan een eigen fase met dezelfde regels.
+
 - [ ] Kwalificatie voorspellen met trainingsdata (FP1-FP3)
 - [ ] Weerdata (bv. Open-Meteo, gratis) en regenkans als feature
-- [ ] Modelvergelijking: LightGBM, CatBoost, Elo-systeem voor coureurs en teams
+- [ ] Bandenstrategie en rondetijden uit trainingen (FP2-longruns), bv. via FastF1
+- [ ] Modelvergelijking: LightGBM, CatBoost
 - [ ] Docker voor een reproduceerbare omgeving
-- [ ] Dashboard met historiek van eigen voorspellingen vs. de realiteit
-- [ ] **Documentatie bijwerken (als deze fase wordt uitgevoerd):** documenteer per toegevoegde uitbreiding de databronnen, configuratie, gebruik, validatie en nieuwe beperkingen; werk README en relevante docs bij.
+- [ ] **Documentatie bijwerken (bij elke opgepakte uitbreiding):** databronnen, configuratie, gebruik, validatie en nieuwe beperkingen; README en relevante docs bijwerken.
 
 ---
 
