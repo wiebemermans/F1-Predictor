@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-25T18:19:14+00:00",
+  "reference": "qualifying_position",
+  "summary": [],
+  "races": [],
+  "run": {
+    "git_commit": "80402c9727bc747b7780c67fd02a66988bc00c25",
+    "git_dirty": true,
+    "package_version": "0.1.0",
+    "versions": {
+      "python": "3.13.18",
+      "xgboost": "3.4.1",
+      "scikit-learn": "1.9.1",
+      "pandas": "3.0.6"
+    },
+    "config": {
+      "data": {
+        "start_season": 2014,
+        "end_season": null
+      },
+      "features": {
+        "groups": [
+          "starting_position",
+          "driver_form",
+          "team_form",
+          "championship",
+          "circuit_history",
+          "teammate"
+        ],
+        "form_windows": [
+          3,
+          5
+        ],
+        "rate_window": 10,
+        "circuit_shrinkage": 3.0
+      },
+      "model": {
+        "final": "xgb_ranker",
+        "tuned": {
+          "ridge": {
+            "feature_set": "upto_championship",
+            "params": {
+              "alpha": 10.0
+            }
+          },
+          "xgb_regressor": {
+            "feature_set": "all",
+            "params": {
+              "max_depth": 2,
+              "n_estimators": 100
+            }
+          },
+          "xgb_ranker": {
+            "feature_set": "all",
+            "params": {
+              "max_depth": 2,
+              "n_estimators": 50
+            }
+          },
+          "xgb_ranker_ndcg": {
+            "feature_set": "all",
+            "params": {
+              "max_depth": 1,
+              "n_estimators": 300
+            }
+          }
+        }
+      },
+      "backtest": {
+        "min_train_races": 20
+      }
+    }
+  }
+}
