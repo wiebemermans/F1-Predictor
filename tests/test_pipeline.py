@@ -1,13 +1,17 @@
 """Integratietest: de volledige CLI-pipeline op een mini-dataset van drie gereden races.
 
-`f1 fetch` -> `features` -> `backtest` (alle suites) -> `train` -> `predict`, zoals een nieuwe
-gebruiker ze uitvoert (zie docs/usage.md). Jolpica wordt vervangen door de fixture
-`tests/fixtures/jolpica_mini.json` en alle paden wijzen naar een tijdelijke map; verder draait
-de echte code. De pipeline loopt één keer per module, de tests controleren elk een stap.
+`f1 fetch` -> `features` -> `backtest` (alle suites) -> `train` -> `predict` -> `evaluate`,
+zoals een nieuwe gebruiker ze uitvoert (zie docs/usage.md). Daarnaast een raceweekend zoals de
+workflows het automatisch doorlopen (docs/automation.md): `predict --next` op verschillende
+momenten, de uitslag die binnenkomt, de backtests en `evaluate`. Jolpica wordt vervangen door de
+fixture `tests/fixtures/jolpica_mini.json` en alle paden wijzen naar een tijdelijke map; verder
+draait de echte code. Elke run loopt één keer per module, de tests controleren elk een stap.
 """
 
+import copy
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 
@@ -22,9 +26,10 @@ from f1_predictor.data import fetch as fetch_module
 from f1_predictor.data.fetch import fetch_seasons
 from f1_predictor.data.jolpica import PAGE_LIMIT, JolpicaClient
 from f1_predictor.evaluation.backtest import run_baseline_backtest, run_feature_backtest
+from f1_predictor.evaluation.history import evaluate_predictions, write_prediction_history
 from f1_predictor.evaluation.model_selection import run_model_backtest, write_comparison_json
 from f1_predictor.features.build import feature_columns, write_feature_table
-from f1_predictor.models.predict import predict_race, write_prediction
+from f1_predictor.models.predict import predict_race, race_to_predict, write_prediction
 from f1_predictor.models.train import train_final_model
 from f1_predictor.paths import ROOT
 
@@ -49,6 +54,7 @@ COMMANDS = [
     ["train"],
     ["predict", "--season", "2024", "--round", "1"],  # al gereden: retrospectieve voorspelling
     ["predict", "--season", "2024", "--round", "2"],  # na de kwalificatie, vóór de race
+    ["evaluate"],
 ]
 # Met `min_train_races: 1` is 2023-1 alleen trainingshistorie.
 TEST_RACES = [(2023, 2), (2024, 1)]
@@ -109,18 +115,9 @@ def _strict_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"), parse_constant=reject)
 
 
-@pytest.fixture(scope="module")
-def pipeline(tmp_path_factory) -> PipelineRun:
-    root = tmp_path_factory.mktemp("project")
-    raw_dir = root / "data" / "raw"
-    processed_dir = root / "data" / "processed"
-    output_dir = root / "output"
-    config_path = root / "config.yaml"
-    config_path.write_text(yaml.safe_dump(CONFIG), encoding="utf-8")
-    client = FixtureClient(json.loads(FIXTURE.read_text(encoding="utf-8")))
-
-    # De CLI roept deze functies aan zonder paden; hier krijgen ze de tijdelijke map mee.
-    redirects = {
+def _redirects(raw_dir: Path, processed_dir: Path, output_dir: Path, client) -> dict:
+    """De CLI roept deze functies aan zonder paden; hier krijgen ze de tijdelijke map mee."""
+    return {
         "fetch_seasons": partial(fetch_seasons, client=client),
         "write_feature_table": partial(
             write_feature_table, raw_dir=raw_dir, output_path=processed_dir / "features.parquet"
@@ -150,7 +147,25 @@ def pipeline(tmp_path_factory) -> PipelineRun:
         ),
         "predict_race": partial(predict_race, data_dir=raw_dir, client=client),
         "write_prediction": partial(write_prediction, output_dir=output_dir / "predictions"),
+        "evaluate_predictions": partial(
+            evaluate_predictions, predictions_dir=output_dir / "predictions", data_dir=raw_dir
+        ),
+        "write_prediction_history": partial(
+            write_prediction_history, output_path=output_dir / "prediction_history.json"
+        ),
     }
+
+
+@pytest.fixture(scope="module")
+def pipeline(tmp_path_factory) -> PipelineRun:
+    root = tmp_path_factory.mktemp("project")
+    raw_dir = root / "data" / "raw"
+    processed_dir = root / "data" / "processed"
+    output_dir = root / "output"
+    config_path = root / "config.yaml"
+    config_path.write_text(yaml.safe_dump(CONFIG), encoding="utf-8")
+    client = FixtureClient(json.loads(FIXTURE.read_text(encoding="utf-8")))
+    redirects = _redirects(raw_dir, processed_dir, output_dir, client)
     # Vangnet: mist er een omleiding, dan schrijft de pipeline in de repo en faalt de test.
     repo_dirs = (ROOT / "data", ROOT / "output")
     repo_before = _snapshot(*repo_dirs)
@@ -298,3 +313,149 @@ def test_predict_writes_contract_json_for_a_past_and_an_upcoming_race(pipeline):
     table = pipeline.stdout["predict --season 2024 --round 2"]
     assert table.splitlines()[0].startswith("Bravo Grand Prix 2024 (ronde 2)")
     assert "GUS" in table
+
+
+def test_evaluate_skips_retrospective_and_unraced_predictions(pipeline):
+    history = _strict_json(pipeline.output_dir / "prediction_history.json")
+
+    # 2024-1 is retrospectief voorspeld en 2024-2 is nog niet gereden: niets te scoren, maar
+    # het bestand bestaat, zodat een website altijd iets kan inlezen.
+    assert history["races"] == []
+    assert history["summary"] == []
+    assert pipeline.stdout["evaluate"].startswith("Nog geen voorspellingen")
+
+
+# --- Een raceweekend zoals de workflows het doorlopen (docs/automation.md) ---
+
+
+@dataclass
+class WeekendRun:
+    output_dir: Path
+    client: FixtureClient
+    stdout: dict[str, str]
+    predictions: dict[str, dict[str, tuple[int, int]]]
+    repo_before: dict[str, tuple[int, int]]
+    repo_after: dict[str, tuple[int, int]]
+
+
+@pytest.fixture(scope="module")
+def weekend(tmp_path_factory) -> WeekendRun:
+    """Vrijdag tot en met maandag rond 2024-2 (kwalificatie za 15:00Z, race zo 14:00Z).
+
+    Na elke stap wordt de map met voorspellingen vastgelegd, zodat de tests kunnen nagaan
+    wanneer er iets geschreven werd.
+    """
+    root = tmp_path_factory.mktemp("weekend")
+    raw_dir = root / "data" / "raw"
+    output_dir = root / "output"
+    config_path = root / "config.yaml"
+    config_path.write_text(yaml.safe_dump(CONFIG), encoding="utf-8")
+    data = copy.deepcopy(json.loads(FIXTURE.read_text(encoding="utf-8")))
+    client = FixtureClient(data)
+    redirects = _redirects(raw_dir, root / "data" / "processed", output_dir, client)
+    repo_dirs = (ROOT / "data", ROOT / "output")
+    repo_before = _snapshot(*repo_dirs)
+    stdout, predictions = {}, {}
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(fetch_module, "RAW_DIR", raw_dir)
+        for name, function in redirects.items():
+            monkeypatch.setattr(cli, name, function)
+        runner = CliRunner()
+
+        def run(label: str, args: list[str], now: str | None = None) -> None:
+            if now is not None:
+                clock = datetime.fromisoformat(now)
+                monkeypatch.setattr(
+                    cli, "race_to_predict", partial(race_to_predict, now=clock, client=client)
+                )
+            result = runner.invoke(cli.app, ["--config", str(config_path), *args])
+            assert result.exit_code == 0, (
+                f"{label}: `f1 {' '.join(args)}` faalde:\n{result.output}\n{result.exception!r}"
+            )
+            stdout[label] = result.stdout
+            predictions[label] = _snapshot(output_dir / "predictions")
+
+        run("fetch", ["fetch"])
+        run("vrijdag", ["predict", "--next"], "2024-03-15T21:17:00+00:00")
+        # De kwalificatie is begonnen, maar Jolpica heeft de uitslag nog niet verwerkt.
+        qualifying = data.pop("2024/2/qualifying")
+        run("tijdens de kwalificatie", ["predict", "--next"], "2024-03-16T15:17:00+00:00")
+        data["2024/2/qualifying"] = qualifying
+        run("na de kwalificatie", ["predict", "--next"], "2024-03-16T18:17:00+00:00")
+        run("later op zaterdag", ["predict", "--next"], "2024-03-16T21:17:00+00:00")
+        # De race is gereden en Jolpica heeft de uitslag verwerkt. 2024 is een afgesloten
+        # seizoen voor `fetch` (vóór dit jaar), dus pas `--force` haalt het opnieuw op.
+        data["2024/results"].append(data["_uitslag_2024_2"])
+        run("fetch na de race", ["fetch", "--force"])
+        run("zondagavond", ["predict", "--next"], "2024-03-17T18:17:00+00:00")
+        run("retrospectief", ["predict", "--season", "2024", "--round", "2"])
+        run("backtest baselines", ["backtest", "--suite", "baselines"])
+        run("backtest features", ["backtest", "--suite", "features"])
+        run("backtest", ["backtest"])
+        run("evaluate", ["evaluate"])
+
+    return WeekendRun(
+        output_dir=output_dir,
+        client=client,
+        stdout=stdout,
+        predictions=predictions,
+        repo_before=repo_before,
+        repo_after=_snapshot(*repo_dirs),
+    )
+
+
+def test_weekend_leaves_repository_data_and_output_untouched(weekend):
+    assert weekend.repo_after == weekend.repo_before
+
+
+def test_predict_next_waits_for_qualifying_and_writes_once(weekend):
+    # Vóór de kwalificatie en zolang Jolpica er geen uitslag van heeft: niets te voorspellen.
+    assert weekend.predictions["vrijdag"] == {}
+    assert weekend.predictions["tijdens de kwalificatie"] == {}
+    assert weekend.stdout["vrijdag"] == ""
+    assert weekend.stdout["tijdens de kwalificatie"] == ""
+    assert "2024" in weekend.client.paths  # de kalender
+
+    after_qualifying = weekend.predictions["na de kwalificatie"]
+    assert sorted(Path(path).name for path in after_qualifying) == ["2024-02.json", "latest.json"]
+    saved = _strict_json(weekend.output_dir / "predictions" / "2024-02.json")
+    assert saved["result_known"] is False
+    assert saved["model"]["training"]["last_race"] == {"season": 2024, "round": 1}
+    # Een latere run met dezelfde kwalificatie herschrijft niets (geen lege commit).
+    assert weekend.predictions["later op zaterdag"] == after_qualifying
+
+
+def test_after_the_race_the_pre_race_prediction_is_kept(weekend):
+    before_race = weekend.predictions["later op zaterdag"]
+
+    # Zondagavond is de volgende race ronde 3; die kwalificatie komt pas zaterdag.
+    assert weekend.predictions["zondagavond"] == before_race
+    assert weekend.stdout["zondagavond"] == ""
+    # Een retrospectieve voorspelling van dezelfde race vervangt die van vooraf niet.
+    assert weekend.predictions["retrospectief"] == before_race
+    assert "Retrospectief" in weekend.stdout["retrospectief"]
+    assert weekend.predictions["evaluate"] == before_race
+
+
+def test_evaluate_scores_the_pre_race_prediction_against_the_result(weekend):
+    history = _strict_json(weekend.output_dir / "prediction_history.json")
+    saved = _strict_json(weekend.output_dir / "predictions" / "2024-02.json")
+
+    assert [entry["race"]["round"] for entry in history["races"]] == [2]
+    entry = history["races"][0]
+    assert entry["prediction_generated_at"] == saved["generated_at"]
+    assert entry["model"] == saved["model"]["name"]
+    # dex kwalificeerde maar startte niet, reserve hal reed zonder kwalificatie.
+    assert entry["not_in_result"] == ["dex"]
+    assert entry["not_in_prediction"] == ["hal"]
+    assert entry["drivers_scored"] == 5
+    # Kwalificatie ada, gus, cora, ben, eli tegen de uitslag gus, ada, cora, ben, eli.
+    reference = entry["scores"]["qualifying_position"]
+    assert reference["mae_positions"] == pytest.approx(0.4)
+    assert reference["spearman"] == pytest.approx(0.9)
+    assert (reference["winner_hit"], reference["podium_overlap"]) == (0, 3)
+    assert {row["model"] for row in history["summary"]} == {"prediction", "qualifying_position"}
+    assert weekend.stdout["evaluate"].startswith("Voorspellingen vooraf tegen de uitslag (1 races)")
+    # De backtests tellen de nieuwe race mee, net als in de workflow na de race.
+    models = pd.read_csv(weekend.output_dir / "backtest_models.csv")
+    assert (2024, 2) in set(zip(models["season"], models["round"], strict=True))
