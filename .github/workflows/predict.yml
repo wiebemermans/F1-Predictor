@@ -1,0 +1,109 @@
+name: Voorspelling
+
+# Voorspelt de volgende race zodra de kwalificatie in Jolpica staat en commit de JSON in
+# output/predictions/ naar main. Planning, rechten en problemen oplossen: docs/automation.md.
+on:
+  schedule:
+    # Elke 3 uur van vrijdag tot en met zondag (UTC), niet op het hele uur (minder vertraging).
+    # `f1 predict --next` beslist met de kalender of er iets te voorspellen is.
+    - cron: "17 */3 * * 5,6,0"
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Seizoen (leeg: de volgende race volgens de kalender)"
+        required: false
+        type: string
+      round:
+        description: "Ronde (alleen samen met seizoen)"
+        required: false
+        type: string
+  pull_request:
+    # Een wijziging aan deze workflow draait eerst op de PR zelf; daar wordt nooit gecommit.
+    paths:
+      - .github/workflows/predict.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  # Eén run tegelijk die naar main commit, gedeeld met post-race.yml. PR-runs staan apart.
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'output-commit' }}
+  cancel-in-progress: false
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_NO_DEV: "1" # ook voor `uv run`: geen jupyter, pytest of ruff nodig
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # volledige historie, zodat `git pull --rebase` werkt
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-suffix: automation # andere pakketten dan ci.yml, dus een eigen cache
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Jaar bepalen (UTC)
+        id: year
+        run: echo "year=$(date -u +%Y)" >> "$GITHUB_OUTPUT"
+
+      # Afgesloten seizoenen worden niet opnieuw opgehaald zolang hun parquet bestaat. Het jaar
+      # in de sleutel geeft elk nieuw jaar één volledige fetch, zodat het vorige seizoen
+      # compleet in de cache komt.
+      - name: Data uit de cache halen
+        id: restore
+        uses: actions/cache/restore@v6
+        with:
+          path: data/raw
+          key: jolpica-raw-${{ steps.year.outputs.year }}-
+          restore-keys: jolpica-raw-${{ steps.year.outputs.year }}-
+
+      - name: Data ophalen
+        run: uv run f1 fetch
+
+      - name: Data in de cache bewaren
+        if: steps.restore.outputs.cache-matched-key != format('jolpica-raw-{0}-{1}', steps.year.outputs.year, hashFiles('data/raw/*.parquet'))
+        uses: actions/cache/save@v6
+        with:
+          path: data/raw
+          key: jolpica-raw-${{ steps.year.outputs.year }}-${{ hashFiles('data/raw/*.parquet') }}
+
+      - name: Voorspellen
+        env:
+          SEASON: ${{ inputs.season }}
+          ROUND: ${{ inputs.round }}
+        run: |
+          if [ -n "$SEASON" ] || [ -n "$ROUND" ]; then
+            uv run f1 predict --season "$SEASON" --round "$ROUND"
+          else
+            uv run f1 predict --next
+          fi
+
+      - name: Committen naar main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git add output/
+          if git diff --cached --quiet; then
+            echo "Geen nieuwe of gewijzigde voorspelling; niets te committen."
+            exit 0
+          fi
+          files=$(git diff --cached --name-only | xargs -n1 basename | tr '\n' ' ')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "update predictions: ${files% }"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Uitvoer als artefact (buiten main)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: predictions
+          path: output/predictions/
+          if-no-files-found: ignore

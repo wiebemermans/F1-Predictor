@@ -1,0 +1,94 @@
+name: Na de race
+
+# Haalt de uitslag op, werkt de drie backtests bij en vergelijkt de voorspellingen van vóór de
+# race met de uitslag (output/prediction_history.json); commit de wijzigingen in output/ naar
+# main. Zonder nieuwe race verandert er niets en volgt er geen commit. Zie docs/automation.md.
+on:
+  schedule:
+    # Maandagochtend (UTC); dinsdag als herkansing als Jolpica de uitslag laat verwerkt.
+    - cron: "41 6 * * 1,2"
+  workflow_dispatch:
+  pull_request:
+    # Een wijziging aan deze workflow draait eerst op de PR zelf; daar wordt nooit gecommit.
+    paths:
+      - .github/workflows/post-race.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  # Eén run tegelijk die naar main commit, gedeeld met predict.yml. PR-runs staan apart.
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'output-commit' }}
+  cancel-in-progress: false
+
+jobs:
+  post-race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      UV_NO_DEV: "1" # ook voor `uv run`: geen jupyter, pytest of ruff nodig
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # volledige historie, zodat `git pull --rebase` werkt
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-suffix: automation # andere pakketten dan ci.yml, dus een eigen cache
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Jaar bepalen (UTC)
+        id: year
+        run: echo "year=$(date -u +%Y)" >> "$GITHUB_OUTPUT"
+
+      # Zelfde datacache als predict.yml; uitleg daar.
+      - name: Data uit de cache halen
+        id: restore
+        uses: actions/cache/restore@v6
+        with:
+          path: data/raw
+          key: jolpica-raw-${{ steps.year.outputs.year }}-
+          restore-keys: jolpica-raw-${{ steps.year.outputs.year }}-
+
+      - name: Data ophalen
+        run: uv run f1 fetch
+
+      - name: Data in de cache bewaren
+        if: steps.restore.outputs.cache-matched-key != format('jolpica-raw-{0}-{1}', steps.year.outputs.year, hashFiles('data/raw/*.parquet'))
+        uses: actions/cache/save@v6
+        with:
+          path: data/raw
+          key: jolpica-raw-${{ steps.year.outputs.year }}-${{ hashFiles('data/raw/*.parquet') }}
+
+      - name: Backtests bijwerken
+        run: |
+          uv run f1 backtest --suite baselines
+          uv run f1 backtest --suite features
+          uv run f1 backtest
+
+      - name: Voorspellingen vooraf tegen de uitslag
+        run: uv run f1 evaluate
+
+      - name: Committen naar main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git add output/
+          if git diff --cached --quiet; then
+            echo "Geen nieuwe uitslag verwerkt; niets te committen."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "update backtests and prediction history"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Uitvoer als artefact (buiten main)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: output
+          path: output/
