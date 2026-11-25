@@ -60,6 +60,31 @@ def flatten_sprint(race: Race) -> list[dict[str, Any]]:
     ]
 
 
+def _session_start(day: str, time: str | None) -> str:
+    """Begin van een sessie als ISO-tekst in UTC; zonder tijd middernacht UTC van die dag."""
+    clock = (time or "00:00:00Z").removesuffix("Z")
+    return f"{day}T{clock}+00:00"
+
+
+def flatten_schedule(race: Race) -> dict[str, Any]:
+    """Eén regel van de racekalender: race-info plus de start van race en kwalificatie (UTC).
+
+    Zonder racetijd telt middernacht UTC van de racedag: een race geldt dan eerder als
+    begonnen, zodat er nooit na de start nog voorspeld wordt. Zonder kwalificatieblok is
+    `qualifying_start` leeg.
+    """
+    qualifying = race.get("Qualifying")
+    return {
+        **_race_info(race),
+        "race_start": _session_start(race["date"], race.get("time")),
+        "qualifying_start": (
+            None
+            if qualifying is None
+            else _session_start(qualifying["date"], qualifying.get("time"))
+        ),
+    }
+
+
 def flatten_race_entry(race: Race) -> list[dict[str, Any]]:
     """Deelnemerslijst van een race uit het kwalificatieblok, met race-info en team.
 

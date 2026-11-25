@@ -19,7 +19,7 @@ import pandas as pd
 from f1_predictor.features.build import FeatureConfig, build_features
 from f1_predictor.models.baselines import RacePredictor
 from f1_predictor.models.train import FEATURE_SETS, ModelSpec
-from f1_predictor.output import write_json
+from f1_predictor.output import write_json_if_changed
 from f1_predictor.paths import OUTPUT_DIR, RAW_DIR
 from f1_predictor.runinfo import utc_now
 
@@ -279,6 +279,12 @@ def write_comparison_json(
     run: Mapping[str, Any],
     output_path: Path = OUTPUT_DIR / "model_comparison.json",
 ) -> Path:
-    """Schrijf `comparison_payload` naar `output_path` (standaard naast de CSV-samenvatting)."""
-    write_json(output_path, comparison_payload(summary, models, final_model, run))
+    """Schrijf `comparison_payload` naar `output_path` (standaard naast de CSV-samenvatting).
+
+    Alleen bij een inhoudelijke wijziging: zonder nieuwe races blijft het bestand ongemoeid.
+    """
+    if not write_json_if_changed(
+        output_path, comparison_payload(summary, models, final_model, run)
+    ):
+        log.info("%s ongewijzigd, niet herschreven", output_path)
     return output_path

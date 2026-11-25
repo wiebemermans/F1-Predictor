@@ -38,6 +38,18 @@ van vóór de kwalificatie zou anders tot een uur lang blijven hangen. De
 seizoensbestanden in `data/raw/` worden hierdoor niet aangepast. Zie
 [usage.md](usage.md).
 
+## Racekalender
+
+`f1 predict --next` haalt de kalender van het lopende jaar op (`/{seizoen}/`, ook zonder
+cache: een verplaatste of geschrapte race moet meteen tellen). Per race komen daaruit seizoen,
+ronde, racenaam, circuit, racedatum en de start van race en kwalificatie in UTC (`date`/`time`
+van de race en van het blok `Qualifying`). Ontbreekt de racetijd, dan telt middernacht UTC van
+de racedag; zo geldt een race eerder als begonnen en wordt er nooit na de start voorspeld.
+Zonder blok `Qualifying` is de kwalificatiestart leeg. Sprintsessies worden niet gebruikt. Een
+seizoen waarvan de kalender nog niet gepubliceerd is, geeft een lege kalender. De kalender wordt
+niet opgeslagen. Hoe de volgende race gekozen wordt, staat in
+[automation.md](automation.md#hoe-f1-predict---next-beslist).
+
 ## Opbouw en opslag
 
 Voor elk seizoen worden results, qualifying en sprint op

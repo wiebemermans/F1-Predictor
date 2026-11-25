@@ -18,6 +18,8 @@ the Jolpica-F1 API (Ergast-compatible). Personal hobby project, built phase by p
   `docs/usage.md`.
 - Test overview, coverage floor, the end-to-end CLI test, leakage checks and rules for new
   tests: `docs/testing.md`.
+- GitHub Actions automation (schedule, `predict --next` decisions, bot commits to `main`,
+  caching, troubleshooting): `docs/automation.md`.
 
 ## Language
 
@@ -40,6 +42,8 @@ uv run f1 tune                            # phase 7 grid on validation seasons -
 uv run f1 backtest                        # baselines + model.tuned -> backtest_models.csv, model_comparison.csv/.json
 uv run f1 train                           # model.final -> output/models/ + output/model_feature_importance.csv
 uv run f1 predict --season 2026 --round 22   # after qualifying -> output/predictions/2026-22.json + latest.json
+uv run f1 predict --next                  # next race from the calendar; exit 0 with "niets te voorspellen" before qualifying
+uv run f1 evaluate                        # pre-race predictions vs. results -> output/prediction_history.json
 uv run python -m f1_predictor.evaluation.explore   # phase 4 report -> output/ + docs/phase4_exploration.md
 ```
 
@@ -52,7 +56,8 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
 
 - `src/f1_predictor/data/` – `jolpica.py` (paged, cached, retrying client), `parse.py` (API JSON ->
   rows), `fetch.py` (per-season table, atomic parquet write; `fetch_race_entry` gets the
-  qualifying entry list of one race, uncached, for `predict`).
+  qualifying entry list of one race, uncached, for `predict`; `fetch_schedule` gets a season's
+  calendar with race/qualifying start in UTC, uncached).
 - `src/f1_predictor/models/baselines.py` – `RacePredictor` protocol: `fit(train_df) -> self`,
   `predict(race_df) -> pd.Series` of unique ranks 1..n with the same index as `race_df`.
   Every future model must implement this interface. `models/linear.py` – `RidgeFeaturePredictor`
@@ -64,12 +69,15 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
   (joblib + metadata JSON with git commit in git-ignored `output/models/`).
   `models/predict.py` – `predict_race` (retrains `model.final` on all races before the target
   race, so it equals that race's backtest fold; upcoming races get their field from live
-  qualifying), `write_prediction` (JSON + `latest.json`).
+  qualifying), `write_prediction` (JSON + `latest.json`; rewrites only on a content change and
+  never replaces a pre-race prediction with a retrospective one), `next_race` /
+  `race_to_predict` (calendar decision for `--next`, injectable `now`), `saved_predictions`.
 - `src/f1_predictor/evaluation/` – `metrics.py` (`score_race`), `backtest.py` (`run_backtest`,
   walk-forward over `(season, round)`; `run_feature_backtest` for cumulative feature groups),
   `model_selection.py` (`summarize_backtest` with paired ΔMAE, tuning grid, `run_model_tuning`
-  on validation seasons only, `run_model_backtest`, `write_comparison_json`), `explore.py`
-  (phase 4 analysis + report).
+  on validation seasons only, `run_model_backtest`, `write_comparison_json`), `history.py`
+  (`f1 evaluate`: scores stored pre-race predictions against results on the drivers in both
+  lists, vs. the qualifying baseline), `explore.py` (phase 4 analysis + report).
 - `src/f1_predictor/features/` – `groups.py` (one function per feature group, plus the shared
   `retirement_mask`), `build.py` (`FeatureConfig`, `build_features`, `feature_columns`,
   `write_feature_table`). Models read only `feature_columns(config)`; the leakage tests in
@@ -78,16 +86,23 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
   `FeatureConfig`, model with `tuned` per family and `final`, backtest); unknown keys are
   rejected. `config/config.yaml` holds the phase 7 choice. `cli.py` – Typer commands.
 - `src/f1_predictor/runinfo.py` (git commit/dirty, versions, config for the `run` block) and
-  `output.py` (atomic writes, `write_json` with NaN -> null). Bump `schema_version` when a JSON
-  field is removed or renamed (contract in `docs/usage.md`).
+  `output.py` (atomic writes, `write_json` with NaN -> null, `write_json_if_changed` which
+  ignores `generated_at` and `run` so scheduled runs without new data commit nothing). Bump
+  `schema_version` when a JSON field is removed or renamed (contract in `docs/usage.md`).
+- `.github/workflows/` – `ci.yml` (lint + tests), `predict.yml` (every 3 h Fri–Sun:
+  `fetch` + `predict --next`) and `post-race.yml` (Mon/Tue: `fetch`, three backtest suites,
+  `evaluate`). The two automation workflows push only `output/` to `main` as
+  github-actions[bot]; `tests/test_workflows.py` checks that every `uv run f1 ...` in them
+  exists.
 - `src/f1_predictor/paths.py` – all paths (`CONFIG_PATH`, `RAW_DIR`, `CACHE_DIR`,
   `PROCESSED_DIR`, `OUTPUT_DIR`, `PREDICTIONS_DIR`). Use these instead of relative paths.
   Library defaults like `data_dir=RAW_DIR` are bound at import, so tests pass explicit paths.
 - `tests/` – one file per module area; `test_models.py` holds the contract test every
   `RacePredictor` (both baselines + each family in `MODEL_FAMILIES`) must pass.
   `test_pipeline.py` runs the whole CLI on `tests/fixtures/jolpica_mini.json` with paths
-  redirected to a temp folder; a new command that writes files needs a redirect there, or the
-  repo-snapshot guard fails the test. Tests never read `data/` and never write to `output/`.
+  redirected to a temp folder (`_redirects`), plus a race-weekend run with a fixed clock; a new
+  command that writes files needs a redirect there, or the repo-snapshot guard fails the test.
+  Tests never read `data/` and never write to `output/`.
 - `data/` is git-ignored; `output/` CSVs and JSON are committed on purpose.
 
 ## Domain rules that are easy to get wrong
@@ -116,6 +131,8 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
 
 - Feature branches named `feat/...`, `docs/...`, `chore/...`, `fix/...`; merge via PR into `main`.
   Never push to `main` unless explicitly asked. Remote: `origin`
-  (github.com/wiebemermans/F1-Predictor).
+  (github.com/wiebemermans/F1-Predictor). The automation bot pushing `output/` to `main` is the
+  user's explicit choice (phase 10); this rule is for agents. Pull before working on `output/`
+  locally: the bot commits there on race weekends.
 - The agent instructions mention a Copilot co-author line; that applies to Copilot's commits.
   Commits made by Claude use Claude's own co-author line.

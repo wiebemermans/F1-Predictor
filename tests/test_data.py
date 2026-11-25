@@ -8,7 +8,7 @@ import requests_cache
 
 from f1_predictor.data import fetch as fetch_module
 from f1_predictor.data import jolpica as jolpica_module
-from f1_predictor.data.fetch import build_season_table, fetch_seasons
+from f1_predictor.data.fetch import build_season_table, fetch_schedule, fetch_seasons
 from f1_predictor.data.jolpica import (
     BASE_URL,
     MAX_RETRIES,
@@ -17,7 +17,7 @@ from f1_predictor.data.jolpica import (
     JolpicaClient,
     JolpicaError,
 )
-from f1_predictor.data.parse import flatten_results
+from f1_predictor.data.parse import flatten_results, flatten_schedule
 
 
 def _race(round_: str, results: list[dict]) -> dict:
@@ -233,3 +233,96 @@ def test_fetch_seasons_continues_after_failure(tmp_path, monkeypatch):
     assert not (tmp_path / "results_2022.parquet").exists()
     saved = pd.read_parquet(tmp_path / "results_2023.parquet")
     assert len(saved) == 2
+
+
+# --- Racekalender ---
+
+
+def _calendar_race(round_: str, date_: str, time: str | None, qualifying: dict | None) -> dict:
+    race = {
+        "season": "2026",
+        "round": round_,
+        "raceName": f"Race {round_}",
+        "Circuit": {"circuitId": f"circuit_{round_}"},
+        "date": date_,
+    }
+    if time is not None:
+        race["time"] = time
+    if qualifying is not None:
+        race["Qualifying"] = qualifying
+    return race
+
+
+def test_flatten_schedule_builds_utc_start_times():
+    race = _calendar_race(
+        "22", "2026-11-29", "16:00:00Z", {"date": "2026-11-28", "time": "18:00:00Z"}
+    )
+
+    assert flatten_schedule(race) == {
+        "season": 2026,
+        "round": 22,
+        "race_name": "Race 22",
+        "circuit_id": "circuit_22",
+        "date": "2026-11-29",
+        "race_start": "2026-11-29T16:00:00+00:00",
+        "qualifying_start": "2026-11-28T18:00:00+00:00",
+    }
+
+
+def test_flatten_schedule_without_times_or_qualifying():
+    # Zonder racetijd telt middernacht UTC: liever te vroeg als gestart dan na de start voorspellen.
+    without_time = flatten_schedule(_calendar_race("1", "2026-03-08", None, {"date": "2026-03-07"}))
+    without_qualifying = flatten_schedule(_calendar_race("2", "2026-03-15", "07:00:00Z", None))
+
+    assert without_time["race_start"] == "2026-03-08T00:00:00+00:00"
+    assert without_time["qualifying_start"] == "2026-03-07T00:00:00+00:00"
+    assert without_qualifying["qualifying_start"] is None
+
+
+class CalendarClient(JolpicaClient):
+    """Client zonder netwerk die de kalender teruggeeft en de opgevraagde paden onthoudt."""
+
+    def __init__(self, races: list[dict]) -> None:
+        self._races = races
+        self.paths: list[str] = []
+
+    def races(self, path: str):
+        self.paths.append(path)
+        return iter(self._races)
+
+
+def test_fetch_schedule_returns_the_season_calendar_in_utc():
+    client = CalendarClient(
+        [
+            _calendar_race("2", "2026-03-15", "07:00:00Z", None),
+            _calendar_race(
+                "1", "2026-03-08", "04:00:00Z", {"date": "2026-03-07", "time": "05:00:00Z"}
+            ),
+        ]
+    )
+
+    schedule = fetch_schedule(2026, client)
+
+    assert client.paths == ["2026"]
+    assert schedule["round"].tolist() == [1, 2]
+    assert schedule.loc[0, "race_start"] == pd.Timestamp("2026-03-08 04:00", tz="UTC")
+    assert schedule.loc[0, "qualifying_start"] == pd.Timestamp("2026-03-07 05:00", tz="UTC")
+    assert pd.isna(schedule.loc[1, "qualifying_start"])
+
+
+def test_fetch_schedule_of_an_unpublished_season_is_empty_and_uncached(monkeypatch):
+    created = []
+
+    class RecordingClient(CalendarClient):
+        def __init__(self, *args) -> None:
+            created.append(args)
+            super().__init__([])
+
+    monkeypatch.setattr(fetch_module, "JolpicaClient", RecordingClient)
+
+    schedule = fetch_schedule(2027)
+
+    # Zonder cachepad: een verouderde kalender mag niet uit de cache terugkomen.
+    assert created == [()]
+    assert schedule.empty
+    assert str(schedule["race_start"].dt.tz) == "UTC"

@@ -1,5 +1,5 @@
 {
-  "_beschrijving": "Mini-dataset voor tests/test_pipeline.py: race-blokken per API-pad, zoals Jolpica ze in MRData.RaceTable.Races teruggeeft. Structuur en veldnamen volgen de echte API (alleen de velden die data/parse.py leest, plus enkele herkenningsvelden); coureurs, teams en uitslagen zijn verzonnen. 2023-1: pitlane-start (fay, grid 0 na P6 in de kwalificatie), statussen uit het oude vocabulaire. 2023-2: sprintweekend, dex zonder kwalificatietijd. 2024-1: zelfde circuit als 2023-1, statussen uit het nieuwe vocabulaire. 2024-2: alleen kwalificatie (race nog niet gereden), rookie gus vervangt fay.",
+  "_beschrijving": "Mini-dataset voor tests/test_pipeline.py: race-blokken per API-pad, zoals Jolpica ze in MRData.RaceTable.Races teruggeeft. Structuur en veldnamen volgen de echte API (alleen de velden die data/parse.py leest, plus enkele herkenningsvelden); coureurs, teams en uitslagen zijn verzonnen. 2023-1: pitlane-start (fay, grid 0 na P6 in de kwalificatie), statussen uit het oude vocabulaire. 2023-2: sprintweekend, dex zonder kwalificatietijd. 2024-1: zelfde circuit als 2023-1, statussen uit het nieuwe vocabulaire. 2024-2: alleen kwalificatie (race nog niet gereden), rookie gus vervangt fay. \"2024\" is de racekalender (rondes 1-3, met start van kwalificatie en race in UTC). \"_uitslag_2024_2\" is geen API-pad: het raceweekend in test_pipeline.py voegt deze uitslag na de race toe aan \"2024/results\"; reserve hal vervangt dan dex, die wel kwalificeerde.",
   "2023/results": [
     {
       "season": "2023", "round": "1", "raceName": "Alpha Grand Prix",
@@ -114,6 +114,39 @@
     }
   ],
   "2024/sprint": [],
+  "2024": [
+    {
+      "season": "2024", "round": "1", "raceName": "Alpha Grand Prix",
+      "Circuit": {"circuitId": "alpha_ring", "circuitName": "Alpha Ring"},
+      "date": "2024-03-03", "time": "15:00:00Z",
+      "Qualifying": {"date": "2024-03-02", "time": "15:00:00Z"}
+    },
+    {
+      "season": "2024", "round": "2", "raceName": "Bravo Grand Prix",
+      "Circuit": {"circuitId": "bravo_park", "circuitName": "Bravo Park"},
+      "date": "2024-03-17", "time": "14:00:00Z",
+      "Qualifying": {"date": "2024-03-16", "time": "15:00:00Z"}
+    },
+    {
+      "season": "2024", "round": "3", "raceName": "Charlie Grand Prix",
+      "Circuit": {"circuitId": "charlie_hill", "circuitName": "Charlie Hill"},
+      "date": "2024-03-24", "time": "14:00:00Z",
+      "Qualifying": {"date": "2024-03-23", "time": "15:00:00Z"}
+    }
+  ],
+  "_uitslag_2024_2": {
+    "season": "2024", "round": "2", "raceName": "Bravo Grand Prix",
+    "Circuit": {"circuitId": "bravo_park", "circuitName": "Bravo Park"},
+    "date": "2024-03-17", "time": "14:00:00Z",
+    "Results": [
+      {"number": "7", "position": "1", "positionText": "1", "points": "25", "Driver": {"driverId": "gus", "code": "GUS"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "2", "laps": "60", "status": "Finished"},
+      {"number": "1", "position": "2", "positionText": "2", "points": "18", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "1", "laps": "60", "status": "Finished"},
+      {"number": "3", "position": "3", "positionText": "3", "points": "15", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "3", "laps": "60", "status": "Finished"},
+      {"number": "2", "position": "4", "positionText": "4", "points": "12", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "4", "laps": "60", "status": "Finished"},
+      {"number": "8", "position": "5", "positionText": "5", "points": "10", "Driver": {"driverId": "hal", "code": "HAL"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "0", "laps": "59", "status": "Lapped"},
+      {"number": "5", "position": "6", "positionText": "R", "points": "0", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "5", "laps": "20", "status": "Retired"}
+    ]
+  },
   "2024/2/qualifying": [
     {
       "season": "2024", "round": "2", "raceName": "Bravo Grand Prix",
