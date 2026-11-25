@@ -3,7 +3,8 @@
 Het eindmodel uit de configuratie wordt bij elke voorspelling opnieuw getraind op alle races
 vóór de gevraagde race. Zo is de voorspelling identiek aan die race in de walk-forward-
 backtest, ook voor een race die al gereden is, en is er geen apart opgeslagen model nodig.
-Het JSON-formaat staat in `docs/usage.md`.
+`race_to_predict` bepaalt met de racekalender welke race er nu te voorspellen valt (voor
+`f1 predict --next` en de geplande workflow). Het JSON-formaat staat in `docs/usage.md`.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from f1_predictor.config import ProjectConfig
-from f1_predictor.data.fetch import fetch_race_entry
+from f1_predictor.data.fetch import fetch_race_entry, fetch_schedule
 from f1_predictor.data.jolpica import JolpicaClient
 from f1_predictor.evaluation.backtest import _load_raw_results
 from f1_predictor.features.build import build_features
@@ -43,6 +45,48 @@ _PREDICTION_FILE = re.compile(r"(\d{4})-(\d{2,})\.json")
 
 class PredictionError(ValueError):
     """Met de lokale data kan deze race (nog) niet voorspeld worden."""
+
+
+def next_race(schedule: pd.DataFrame, now: datetime) -> dict[str, Any] | None:
+    """De eerste race uit de kalender die op `now` nog niet gestart is; anders `None`."""
+    if now.tzinfo is None:
+        raise ValueError("now moet een tijdzone hebben (UTC)")
+    upcoming = schedule.loc[schedule["race_start"] > pd.Timestamp(now)]
+    if upcoming.empty:
+        return None
+    return upcoming.sort_values("race_start", kind="stable").iloc[0].to_dict()
+
+
+def race_to_predict(
+    now: datetime | None = None, client: JolpicaClient | None = None
+) -> tuple[int, int] | None:
+    """Seizoen en ronde van de volgende race, of `None` als er nu niets te voorspellen is.
+
+    Gebruikt de kalender van het lopende jaar (UTC). Niets te doen: er is geen komende race
+    meer (of de kalender is nog niet gepubliceerd), of de kwalificatie van de volgende race
+    is nog niet begonnen. Vóór die kwalificatie hoeft de vorige race nog niet in de data te
+    staan, dus wordt er zelfs niet geprobeerd. Of de kwalificatie-uitslag er al is, blijkt
+    pas bij `predict_race`.
+    """
+    now = now or datetime.now(UTC)
+    race = next_race(fetch_schedule(now.year, client), now)
+    if race is None:
+        log.info("Geen komende race in de kalender van %d; niets te voorspellen", now.year)
+        return None
+    season, round_number = int(race["season"]), int(race["round"])
+    qualifying_start = race["qualifying_start"]
+    if not pd.isna(qualifying_start) and pd.Timestamp(now) < qualifying_start:
+        log.info(
+            "Volgende race: %s (%d ronde %d); de kwalificatie begint pas op %s, "
+            "niets te voorspellen",
+            race["race_name"],
+            season,
+            round_number,
+            qualifying_start.isoformat(),
+        )
+        return None
+    log.info("Volgende race: %s (%d ronde %d)", race["race_name"], season, round_number)
+    return season, round_number
 
 
 def _races_before(

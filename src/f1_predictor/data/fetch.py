@@ -15,6 +15,7 @@ from f1_predictor.data.parse import (
     flatten_qualifying,
     flatten_race_entry,
     flatten_results,
+    flatten_schedule,
     flatten_sprint,
 )
 from f1_predictor.paths import CACHE_DIR, RAW_DIR
@@ -22,6 +23,15 @@ from f1_predictor.paths import CACHE_DIR, RAW_DIR
 log = logging.getLogger(__name__)
 
 KEYS = ["season", "round", "driver_id"]
+SCHEDULE_COLUMNS = [
+    "season",
+    "round",
+    "race_name",
+    "circuit_id",
+    "date",
+    "race_start",
+    "qualifying_start",
+]
 
 
 class NoResultsError(ValueError):
@@ -142,3 +152,19 @@ def fetch_race_entry(
     entry["date"] = pd.to_datetime(entry["date"])
     entry["quali_position"] = entry["quali_position"].astype("Int64")
     return entry.sort_values(["quali_position", "driver_id"]).reset_index(drop=True)
+
+
+def fetch_schedule(season: int, client: JolpicaClient | None = None) -> pd.DataFrame:
+    """De racekalender van één seizoen, met de start van race en kwalificatie in UTC.
+
+    Zonder `client` wordt een client zonder cache gebruikt: een kalender kan wijzigen
+    (verplaatste of geschrapte races) en een verouderd antwoord mag niet blijven hangen.
+    Een seizoen waarvan de kalender nog niet gepubliceerd is, geeft een lege tabel.
+    """
+    client = client or JolpicaClient()
+    rows = [flatten_schedule(race) for race in client.races(str(season))]
+    schedule = pd.DataFrame(rows, columns=SCHEDULE_COLUMNS)
+    schedule["date"] = pd.to_datetime(schedule["date"])
+    for column in ("race_start", "qualifying_start"):
+        schedule[column] = pd.to_datetime(schedule[column], utc=True)
+    return schedule.sort_values("round").reset_index(drop=True)

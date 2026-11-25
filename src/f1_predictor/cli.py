@@ -30,6 +30,7 @@ from f1_predictor.models.predict import (
     PredictionError,
     format_prediction,
     predict_race,
+    race_to_predict,
     write_prediction,
 )
 from f1_predictor.models.train import train_final_model
@@ -178,16 +179,46 @@ def train(ctx: typer.Context) -> None:
 @app.command()
 def predict(
     ctx: typer.Context,
-    season: Annotated[int, typer.Option(help="Seizoen, bv. 2026")],
-    round_number: Annotated[int, typer.Option("--round", help="Ronde in het seizoen", min=1)],
+    season: Annotated[int | None, typer.Option(help="Seizoen, bv. 2026")] = None,
+    round_number: Annotated[
+        int | None, typer.Option("--round", help="Ronde in het seizoen", min=1)
+    ] = None,
+    upcoming: Annotated[
+        bool,
+        typer.Option(
+            "--next",
+            help="De volgende race volgens de kalender; eindigt zonder fout als er nog niets "
+            "te voorspellen is (vóór de kwalificatie of na de laatste race)",
+        ),
+    ] = False,
 ) -> None:
     """Voorspel één race na de kwalificatie; schrijft JSON naar output/predictions/."""
+    if upcoming and (season is not None or round_number is not None):
+        raise typer.BadParameter("--next gaat niet samen met --season en --round")
+    if not upcoming and (season is None or round_number is None):
+        raise typer.BadParameter("geef --season en --round, of --next")
     project = _project(ctx)
     try:
+        if upcoming:
+            race = race_to_predict()
+            if race is None:
+                return
+            season, round_number = race
         payload = predict_race(season, round_number, project)
     except FileNotFoundError as error:
         _fail(f"{error}. {MISSING_DATA_HINT}")
-    except (PredictionError, QualifyingNotAvailableError) as error:
+    except QualifyingNotAvailableError as error:
+        if upcoming:
+            # De kwalificatie is begonnen maar nog niet verwerkt; een latere run probeert opnieuw.
+            log.info(
+                "De kwalificatie-uitslag van %d ronde %d staat nog niet in Jolpica; "
+                "niets te voorspellen",
+                season,
+                round_number,
+            )
+            return
+        _fail(str(error))
+    except PredictionError as error:
         _fail(str(error))
     except (JolpicaError, requests.RequestException) as error:
         _fail(f"Jolpica-API niet bereikbaar: {error}")

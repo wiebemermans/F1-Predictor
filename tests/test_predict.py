@@ -1,7 +1,8 @@
 import json
+import logging
 import math
 import subprocess
-from datetime import date
+from datetime import UTC, date, datetime
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,9 @@ from f1_predictor.features.build import build_features
 from f1_predictor.models.predict import (
     PredictionError,
     format_prediction,
+    next_race,
     predict_race,
+    race_to_predict,
     write_prediction,
 )
 from f1_predictor.models.train import ModelSpec
@@ -154,6 +157,84 @@ def test_fetch_race_entry_asks_one_race_and_requires_qualifying():
     assert str(entry["quali_position"].dtype) == "Int64"
     with pytest.raises(QualifyingNotAvailableError, match="Nog geen kwalificatie"):
         fetch_race_entry(2024, 3, QualifyingClient([]))
+
+
+# --- Volgende race volgens de kalender ---
+
+
+def _schedule() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "season": [2026, 2026],
+            "round": [22, 23],
+            "race_name": ["Qatar Grand Prix", "Abu Dhabi Grand Prix"],
+            "race_start": pd.to_datetime(["2026-11-29 16:00", "2026-12-06 13:00"], utc=True),
+            "qualifying_start": pd.to_datetime(["2026-11-28 18:00", "2026-12-05 14:00"], utc=True),
+        }
+    )
+
+
+def _utc(text: str) -> datetime:
+    return datetime.fromisoformat(text).replace(tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("now", "expected_round"),
+    [
+        ("2026-11-25 12:00", 22),  # vóór de kwalificatie
+        ("2026-11-28 20:00", 22),  # tussen kwalificatie en race
+        ("2026-11-29 16:00", 23),  # exact op de starttijd telt de race als begonnen
+        ("2026-12-06 13:00", None),  # na de start van de laatste race
+    ],
+)
+def test_next_race_is_the_first_race_that_has_not_started(now, expected_round):
+    race = next_race(_schedule(), _utc(now))
+
+    assert (None if race is None else race["round"]) == expected_round
+
+
+def test_next_race_needs_a_timezone_and_handles_an_empty_calendar():
+    with pytest.raises(ValueError, match="tijdzone"):
+        next_race(_schedule(), datetime(2026, 11, 25))
+    assert next_race(_schedule().iloc[0:0], _utc("2026-11-25 12:00")) is None
+
+
+def _calendar_race(round_: int, race_start: str, qualifying_start: str) -> dict:
+    race_day, race_time = race_start.split(" ")
+    quali_day, quali_time = qualifying_start.split(" ")
+    return {
+        "season": "2026",
+        "round": str(round_),
+        "raceName": f"Race {round_}",
+        "Circuit": {"circuitId": f"circuit_{round_}"},
+        "date": race_day,
+        "time": f"{race_time}:00Z",
+        "Qualifying": {"date": quali_day, "time": f"{quali_time}:00Z"},
+    }
+
+
+CALENDAR = [
+    _calendar_race(22, "2026-11-29 16:00", "2026-11-28 18:00"),
+    _calendar_race(23, "2026-12-06 13:00", "2026-12-05 14:00"),
+]
+
+
+@pytest.mark.parametrize(
+    ("now", "expected", "message"),
+    [
+        ("2026-11-25 12:00", None, "de kwalificatie begint pas op 2026-11-28T18:00:00+00:00"),
+        ("2026-11-28 18:00", (2026, 22), "Volgende race: Race 22 (2026 ronde 22)"),
+        ("2026-11-29 20:00", None, "de kwalificatie begint pas op 2026-12-05"),
+        ("2026-12-07 08:00", None, "Geen komende race in de kalender van 2026"),
+    ],
+)
+def test_race_to_predict_waits_until_qualifying_has_started(now, expected, message, caplog):
+    caplog.set_level(logging.INFO)
+    client = QualifyingClient(CALENDAR)
+
+    assert race_to_predict(_utc(now), client) == expected
+    assert client.paths == ["2026"]
+    assert message in caplog.text
 
 
 # --- Voorspellen ---
@@ -429,3 +510,84 @@ def test_cli_predict_requires_season_and_round():
     result = CliRunner().invoke(cli.app, ["predict", "--season", "2026"])
 
     assert result.exit_code != 0
+
+
+def _fake_prediction(payload: dict, calls: list):
+    def fake_predict(season, round_number, project):
+        calls.append((season, round_number))
+        return payload
+
+    return fake_predict
+
+
+def test_cli_predict_next_predicts_the_race_from_the_calendar(tmp_path, monkeypatch):
+    payload = predict_race(2023, 3, _project(), _raw_dir(tmp_path))
+    calls = []
+    monkeypatch.setattr(cli, "race_to_predict", lambda: (2023, 3))
+    monkeypatch.setattr(cli, "predict_race", _fake_prediction(payload, calls))
+    monkeypatch.setattr(
+        cli, "write_prediction", lambda data: write_prediction(data, tmp_path / "out")
+    )
+
+    result = CliRunner().invoke(cli.app, ["predict", "--next"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == [(2023, 3)]
+    assert (tmp_path / "out" / "2023-03.json").exists()
+
+
+def test_cli_predict_next_without_a_race_to_predict_does_nothing(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli, "race_to_predict", lambda: None)
+    monkeypatch.setattr(cli, "predict_race", _fake_prediction({}, calls))
+
+    result = CliRunner().invoke(cli.app, ["predict", "--next"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == []
+    assert result.stdout == ""
+
+
+def test_cli_predict_next_waits_while_jolpica_has_no_qualifying(monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+
+    def no_qualifying(season, round_number, project):
+        raise QualifyingNotAvailableError("Nog geen kwalificatie-uitslag voor 2026 ronde 22")
+
+    monkeypatch.setattr(cli, "race_to_predict", lambda: (2026, 22))
+    monkeypatch.setattr(cli, "predict_race", no_qualifying)
+
+    result = CliRunner().invoke(cli.app, ["predict", "--next"])
+
+    # Bij een geplande run is dat geen fout: een latere run probeert het opnieuw.
+    assert result.exit_code == 0, result.output
+    assert "2026 ronde 22 staat nog niet in Jolpica" in caplog.text
+
+
+def test_cli_predict_next_reports_an_unreachable_calendar(monkeypatch, caplog):
+    def unreachable():
+        raise JolpicaError("Mislukt na 5 pogingen")
+
+    monkeypatch.setattr(cli, "race_to_predict", unreachable)
+
+    result = CliRunner().invoke(cli.app, ["predict", "--next"])
+
+    assert result.exit_code == 1
+    assert "Jolpica-API niet bereikbaar" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["predict"],
+        ["predict", "--round", "3"],
+        ["predict", "--next", "--season", "2026"],
+        ["predict", "--next", "--season", "2026", "--round", "22"],
+    ],
+)
+def test_cli_predict_takes_either_next_or_season_and_round(args, monkeypatch):
+    monkeypatch.setattr(cli, "race_to_predict", lambda: pytest.fail("geen kalender verwacht"))
+
+    result = CliRunner().invoke(cli.app, args)
+
+    assert result.exit_code == 2
