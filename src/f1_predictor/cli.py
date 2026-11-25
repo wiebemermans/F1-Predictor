@@ -16,6 +16,11 @@ from f1_predictor.config import ConfigError, ProjectConfig, load_config
 from f1_predictor.data.fetch import QualifyingNotAvailableError, fetch_seasons
 from f1_predictor.data.jolpica import JolpicaError
 from f1_predictor.evaluation.backtest import run_baseline_backtest, run_feature_backtest
+from f1_predictor.evaluation.history import (
+    evaluate_predictions,
+    format_history,
+    write_prediction_history,
+)
 from f1_predictor.evaluation.model_selection import (
     run_model_backtest,
     run_model_tuning,
@@ -224,3 +229,15 @@ def predict(
         _fail(f"Jolpica-API niet bereikbaar: {error}")
     write_prediction(payload)
     typer.echo(format_prediction(payload))
+
+
+@app.command()
+def evaluate(ctx: typer.Context) -> None:
+    """Vergelijk de voorspellingen van vóór de race met de uitslag; schrijft de historiek."""
+    project = _project(ctx)
+    try:
+        payload = evaluate_predictions(run=run_metadata(project))
+    except FileNotFoundError as error:
+        _fail(f"{error}. {MISSING_DATA_HINT}")
+    write_prediction_history(payload)
+    typer.echo(format_history(payload))

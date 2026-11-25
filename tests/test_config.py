@@ -188,6 +188,7 @@ def test_cli_fetch_rejects_start_after_end(monkeypatch):
         (["tune"], "run_model_tuning"),
         (["train"], "train_final_model"),
         (["predict", "--season", "2026", "--round", "1"], "predict_race"),
+        (["evaluate"], "evaluate_predictions"),
     ],
 )
 def test_cli_points_to_fetch_when_raw_data_is_missing(args, function, monkeypatch, caplog):
