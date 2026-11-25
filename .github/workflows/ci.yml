@@ -1,9 +1,13 @@
 name: CI
 
+# Wijzigingen die alleen documentatie raken, starten geen CI: de tests lezen geen Markdown.
+# `output/` staat hier bewust niet bij, want een test leest `output/model_tuning.csv`.
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
 
 jobs:
   test:

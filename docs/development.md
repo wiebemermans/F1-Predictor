@@ -71,6 +71,7 @@ uv run pre-commit run --all-files
 
 GitHub Actions voert `uv sync --locked`, Ruff en pytest met coverage
 (ondergrens 90%) uit op pushes naar `main` en op pull requests, en zet de
-coveragetabel in de samenvatting van de run. De CI-configuratie staat in
-`.github/workflows/ci.yml`. Twee geplande workflows voorspellen elke race en werken na de race de
+coveragetabel in de samenvatting van de run. Wijzigingen die alleen documentatie raken
+(Markdown, `docs/`, `LICENSE`) slaan de CI over, zie [testing.md](testing.md#ci). De
+CI-configuratie staat in `.github/workflows/ci.yml`. Twee geplande workflows voorspellen elke race en werken na de race de
 backtests bij; die staan in [automation.md](automation.md).

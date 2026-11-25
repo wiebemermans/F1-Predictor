@@ -159,6 +159,12 @@ push naar `main`:
 3. `uv run pytest --cov`: alle tests, en een fout als de coverage onder 90% zakt;
 4. de coveragetabel in de samenvatting van de run op GitHub (ook als een eerdere stap faalt).
 
+Een push of PR die alleen Markdown-bestanden, `docs/` of `LICENSE` wijzigt, start geen CI
+(`paths-ignore`). Zit er ook maar één ander bestand bij, dan draait alles. `output/` valt daar
+bewust niet onder, omdat `test_model_selection.py` `output/model_tuning.csv` leest. Wordt de
+CI ooit een verplichte check voor `main`, dan blijft een overgeslagen run op "wachtend" staan
+en kan zo'n docs-PR niet gemerged worden; pas dan de configuratie aan.
+
 De geplande workflows `predict.yml` en `post-race.yml` draaien de tests niet; ze staan in
 [automation.md](automation.md). Een PR die een van die workflows wijzigt, start die workflow
 ook op de PR zelf (zonder commit, met de uitvoer als artefact).
