@@ -62,7 +62,11 @@ mail van GitHub): Jolpica onbereikbaar, of een eerdere ronde die in de data ontb
 
 Beide workflows beginnen hetzelfde:
 
-1. Checkout met de volledige historie (`fetch-depth: 0`), zodat `git pull --rebase` werkt.
+1. Checkout van de nieuwste stand van de branch bij de start van de job (`ref: github.ref`),
+   met de volledige historie (`fetch-depth: 0`), zodat `git pull --rebase` werkt. Zonder die
+   `ref` neemt GitHub de commit van het moment waarop de run werd aangemaakt. Een run die in de
+   wachtrij stond, deed dan het werk van de run vóór hem opnieuw en botste bij het committen op
+   diens commit (zo gebeurd bij de eerste run na de merge).
 2. uv installeren en `uv sync --locked`, met `UV_NO_DEV=1`: zonder de dev-tools (jupyter,
    pytest, ruff), ook niet bij `uv run`.
 3. `data/raw/` uit de cache halen en `uv run f1 fetch` uitvoeren. Afgesloten seizoenen staan al
@@ -210,7 +214,7 @@ Moet de server toch zelf rekenen, dan volstaat dezelfde CLI in een cronjob:
 | Rode run bij "Data ophalen" of "Voorspellen" met `Jolpica-API niet bereikbaar` | Jolpica is tijdelijk onbereikbaar of beperkt het aantal requests (de client probeert HTTP 429/5xx tot vijf keer). Wacht en start de run opnieuw (`gh run rerun`). |
 | `Ronde(s) [21] van 2026 ontbreken in de lokale data` | De uitslag van de vorige race staat nog niet in Jolpica, of de fetch mislukte. Start de run later opnieuw. |
 | Geen voorspelling na de kwalificatie | Kijk in de log van de laatste run: "begint pas op" (de kalender wijkt af), "staat nog niet in Jolpica" (nog niet verwerkt). Start `predict.yml` met de hand zodra de uitslag er is. |
-| De commitstap faalt bij `git pull --rebase` | Iemand wijzigde tegelijk dezelfde bestanden in `output/`. Los het lokaal op (`git pull`) en start de workflow opnieuw. |
+| De commitstap faalt bij `git pull --rebase` | Iemand wijzigde tegelijk dezelfde bestanden in `output/`. Start de workflow opnieuw: hij begint dan van de nieuwste stand en commit alleen wat nog ontbreekt. |
 | De push faalt met 403 | `GITHUB_TOKEN` mag niet schrijven. Controleer Settings → Actions → General → Workflow permissions en eventuele branch protection op `main`. |
 | Geen geplande runs meer | De workflow is uitgeschakeld (60 dagen zonder activiteit) of staat nog niet op `main`. Zet hem aan met `gh workflow enable`. |
 | CSV-wijzigingen zonder nieuwe race | Jolpica corrigeerde een eerdere uitslag van het lopende seizoen (straf, diskwalificatie), of het is de eerste run op Linux (zie hierboven). |

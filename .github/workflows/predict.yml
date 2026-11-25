@@ -39,6 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # De nieuwste stand van de branch bij de start van de job, niet de commit van het
+          # moment waarop de run werd aangemaakt: een run die in de wachtrij stond, ziet zo de
+          # commit van de run vóór hem en doet diens werk niet nog eens over.
+          ref: ${{ github.ref }}
           fetch-depth: 0 # volledige historie, zodat `git pull --rebase` werkt
 
       - uses: astral-sh/setup-uv@v10.4.0 # deze actie heeft geen verschuivende v10-tag
