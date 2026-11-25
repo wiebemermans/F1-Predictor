@@ -60,3 +60,9 @@ def test_automation_workflows_are_scheduled_and_commit_only_from_main(name):
     assert len(pushes) == 1
     assert pushes[0]["if"] == "github.ref == 'refs/heads/main'"
     assert "git add output/" in pushes[0]["run"]
+    # Een run uit de wachtrij moet de commit van de vorige run zien (de nieuwste stand van
+    # de branch), anders doet hij hetzelfde werk opnieuw en botst zijn commit erop.
+    checkout = next(
+        step for step in _steps(workflow) if step.get("uses", "").startswith("actions/checkout")
+    )
+    assert checkout["with"]["ref"] == "${{ github.ref }}"
