@@ -282,8 +282,10 @@ backtest. Zonder gescoorde races bestaat het bestand wel, met lege `summary` en 
   inhoudelijk gelijk bleef, houdt het `run`-blok van de run die het maakte.
 - De metadata van `f1 train` (`output/models/<model>.json`) bevat dezelfde git-informatie.
 - De seeds liggen vast: `random_state=0` in `DEFAULT_XGB_PARAMS`, geen `subsample`, en Ridge
-  is deterministisch. Dezelfde data, configuratie en bibliotheekversies geven dezelfde uitvoer;
-  een herhaalde `f1 backtest` gaf byte-identieke CSV's.
+  is deterministisch. Dezelfde data, configuratie en bibliotheekversies geven op dezelfde machine
+  dezelfde uitvoer; een herhaalde `f1 backtest` gaf byte-identieke CSV's. Tussen Windows en
+  Linux rangschikken de XGBoost-modellen een deel van de races anders; de gemiddelden
+  verschuiven nauwelijks ([automation.md](automation.md#wanneer-er-een-commit-komt)).
 
 ## Veelvoorkomende fouten
 

@@ -93,10 +93,16 @@ runs elkaars werk overdoen, gaat er niets verloren.
   wordt nooit vervangen door een retrospectieve (`result_known: true`), ook niet bij een
   handmatige run na de race. Een gecorrigeerde kwalificatie vóór de race geeft wel een nieuwe
   versie. Zo kan `f1 evaluate` na de race precies de voorspelling scoren die vooraf vastlag.
-- **De eerste run op Linux.** De vastgelegde CSV's zijn op Windows gemaakt. Bij herhaalde runs
-  op dezelfde machine zijn ze byte-identiek, maar tussen Windows en Linux is dat niet getest.
-  Kleine afrondingsverschillen kunnen in de eerste commit van `post-race.yml` opduiken; daarna
-  rekent alles op dezelfde runner.
+- **Linux en Windows verschillen bij XGBoost.** De vastgelegde CSV's zijn op Windows gemaakt,
+  de workflows draaien op Linux. Een test op de PR (november 2026, zelfde data en
+  bibliotheekversies) gaf voor de baselines, Ridge en de featurebacktest byte-identieke CSV's.
+  De drie XGBoost-modellen rangschikken in een deel van de races anders: de MAE verschilde in
+  446 van de 1518 rijen en de voorspelde winnaar in 20 races. Op de holdout verschuiven de
+  gemiddelden weinig: het eindmodel haalde een MAE van 3,306 op Windows en 3,291 op Linux, en een
+  podiumoverlap van 2,018 en 2,053. Op dezelfde machine blijven de resultaten reproduceerbaar.
+  Daarom vervangt de eerste commit van `post-race.yml` de modelrijen door de Linux-cijfers. Vanaf
+  dan rekenen backtest en voorspellingen op dezelfde runner, maar de cijfers in
+  [model.md](model.md) en een lokale run op Windows kunnen licht afwijken.
 
 ## Rechten en secrets
 
