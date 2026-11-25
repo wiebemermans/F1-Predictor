@@ -1,9 +1,11 @@
 import json
+import logging
 
 import joblib
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from f1_predictor import cli
@@ -21,7 +23,7 @@ from f1_predictor.evaluation.model_selection import (
 )
 from f1_predictor.features.build import FeatureConfig, build_features, feature_columns
 from f1_predictor.models.train import FEATURE_SETS, ModelSpec, train_final_model
-from f1_predictor.paths import OUTPUT_DIR
+from f1_predictor.paths import CONFIG_PATH, OUTPUT_DIR
 
 POINTS = {1: 25.0, 2: 18.0, 3: 15.0, 4: 12.0, 5: 10.0}
 SMALL_XGB = {"max_depth": 2, "n_estimators": 5}
@@ -342,6 +344,35 @@ def test_cli_backtest_runs_the_chosen_suite_with_configured_settings(tmp_path, m
     assert calls["models"]["models"] == config.model.tuned
     # Twee modellen in twee perioden (holdout en alles).
     assert calls["json"] == (4, "xgb_ranker_d2_n50_all")
+
+
+def test_cli_tune_reports_whether_the_config_follows_the_selection_rules(
+    tmp_path, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
+    # De vastgelegde tuningrun als uitkomst; de echte grid duurt ongeveer 45 minuten.
+    summary = pd.read_csv(OUTPUT_DIR / "model_tuning.csv")
+    calls = []
+    monkeypatch.setattr(cli, "run_model_tuning", lambda **kw: calls.append(kw) or summary)
+    runner = CliRunner()
+
+    following = runner.invoke(cli.app, ["tune"])
+
+    assert following.exit_code == 0, following.output
+    assert calls == [{"min_train_races": 20, "config": load_config().features}]
+    assert "De configuratie volgt de selectieregels" in caplog.text
+
+    caplog.clear()
+    raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    raw["model"]["final"] = "ridge"
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    differing = runner.invoke(cli.app, ["--config", str(path), "tune"])
+
+    assert differing.exit_code == 0, differing.output
+    assert "De selectieregels kiezen andere modellen" in caplog.text
+    assert "eindmodel xgb_ranker" in caplog.text
 
 
 def test_cli_train_uses_the_configured_final_model(monkeypatch):

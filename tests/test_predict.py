@@ -6,12 +6,13 @@ from datetime import date
 import numpy as np
 import pandas as pd
 import pytest
+import requests
 from typer.testing import CliRunner
 
 from f1_predictor import cli, runinfo
 from f1_predictor.config import BacktestConfig, ModelConfig, ProjectConfig, load_config
 from f1_predictor.data.fetch import QualifyingNotAvailableError, fetch_race_entry
-from f1_predictor.data.jolpica import JolpicaClient
+from f1_predictor.data.jolpica import JolpicaClient, JolpicaError
 from f1_predictor.data.parse import flatten_race_entry
 from f1_predictor.evaluation.backtest import run_backtest
 from f1_predictor.evaluation.metrics import score_race
@@ -405,6 +406,23 @@ def test_cli_predict_reports_missing_qualifying(monkeypatch, caplog):
 
     assert result.exit_code == 1
     assert "Nog geen kwalificatie" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "error",
+    [JolpicaError("Mislukt na 5 pogingen"), requests.ConnectionError("geen netwerk")],
+)
+def test_cli_predict_reports_unreachable_api(monkeypatch, caplog, error):
+    def unreachable(season, round_number, project):
+        raise error
+
+    monkeypatch.setattr(cli, "predict_race", unreachable)
+
+    result = CliRunner().invoke(cli.app, ["predict", "--season", "2026", "--round", "22"])
+
+    assert result.exit_code == 1
+    assert "Jolpica-API niet bereikbaar" in caplog.text
+    assert str(error) in caplog.text
 
 
 def test_cli_predict_requires_season_and_round():
