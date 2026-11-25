@@ -24,5 +24,10 @@ jobs:
       - name: Format check
         run: uv run ruff format --check .
 
-      - name: Tests
-        run: uv run pytest
+      - name: Tests with coverage
+        run: uv run pytest --cov
+
+      # Alleen rapporteren: de ondergrens wordt al in de teststap bewaakt.
+      - name: Coverage summary
+        if: always()
+        run: uv run coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"

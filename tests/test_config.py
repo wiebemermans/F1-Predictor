@@ -169,3 +169,34 @@ def test_cli_fetch_fails_when_a_season_fails(tmp_path, monkeypatch, caplog):
 
     assert result.exit_code == 1
     assert "2021" in caplog.text
+
+
+def test_cli_fetch_rejects_start_after_end(monkeypatch):
+    monkeypatch.setattr(cli, "fetch_seasons", lambda *args, **kwargs: pytest.fail("geen fetch"))
+
+    result = CliRunner().invoke(cli.app, ["fetch", "--start", "2025", "--end", "2024"])
+
+    assert result.exit_code == 2  # ongeldige parameter, zoals bij een typfout in de opties
+
+
+@pytest.mark.parametrize(
+    ("args", "function"),
+    [
+        (["backtest", "--suite", "baselines"], "run_baseline_backtest"),
+        (["backtest", "--suite", "features"], "run_feature_backtest"),
+        (["backtest"], "run_model_backtest"),
+        (["tune"], "run_model_tuning"),
+        (["train"], "train_final_model"),
+        (["predict", "--season", "2026", "--round", "1"], "predict_race"),
+    ],
+)
+def test_cli_points_to_fetch_when_raw_data_is_missing(args, function, monkeypatch, caplog):
+    def missing_data(*_args, **_kwargs):
+        raise FileNotFoundError("Geen results_*.parquet-bestanden gevonden in data/raw")
+
+    monkeypatch.setattr(cli, function, missing_data)
+
+    result = CliRunner().invoke(cli.app, args)
+
+    assert result.exit_code == 1
+    assert cli.MISSING_DATA_HINT in caplog.text

@@ -1,15 +1,25 @@
+from collections.abc import Callable
+from functools import partial
+
 import numpy as np
 import pandas as pd
 import pytest
 import xgboost as xgb
 
+from f1_predictor.models.baselines import (
+    ChampionshipPointsBaseline,
+    QualifyingPositionBaseline,
+    RacePredictor,
+)
 from f1_predictor.models.boosting import (
     XGBNDCGRankerPredictor,
     XGBRankerPredictor,
     XGBRegressorPredictor,
 )
 from f1_predictor.models.linear import RidgeFeaturePredictor
+from f1_predictor.models.train import MODEL_FAMILIES
 
+POINTS = {1: 25.0, 2: 18.0, 3: 15.0, 4: 12.0, 5: 10.0, 6: 8.0}
 FEATURES = ["start_position", "noise"]
 LABEL_COLUMNS = ["finish_position", "position_text", "status", "points", "laps", "sprint_points"]
 XGB_PREDICTORS = [XGBRegressorPredictor, XGBRankerPredictor, XGBNDCGRankerPredictor]
@@ -18,7 +28,10 @@ FAST = {"n_estimators": 30, "max_depth": 3, "learning_rate": 0.3}
 
 
 def _table(n_races: int = 8, n_drivers: int = 6, seed: int = 0) -> pd.DataFrame:
-    """Synthetische featuretabel waarin de finish exact de startpositie volgt."""
+    """Synthetische featuretabel waarin de finish exact de startpositie volgt.
+
+    Met kwalificatiepositie en punten, zodat ook de baselines erop kunnen draaien.
+    """
     rng = np.random.default_rng(seed)
     frames = []
     for number in range(n_races):
@@ -30,12 +43,13 @@ def _table(n_races: int = 8, n_drivers: int = 6, seed: int = 0) -> pd.DataFrame:
                     "round": number % 4 + 1,
                     "race_name": f"Race {number}",
                     "driver_id": [f"d{index}" for index in range(n_drivers)],
+                    "quali_position": pd.array(start, dtype="Int64"),
                     "start_position": start.astype(float),
                     "noise": rng.normal(size=n_drivers),
                     "finish_position": start,
                     "position_text": [str(position) for position in start],
                     "status": "Finished",
-                    "points": 0.0,
+                    "points": [POINTS.get(position, 0.0) for position in start],
                     "laps": 50,
                     "sprint_points": 0.0,
                 }
@@ -47,6 +61,42 @@ def _table(n_races: int = 8, n_drivers: int = 6, seed: int = 0) -> pd.DataFrame:
 def _split(data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     last = data["race_name"] == data["race_name"].iloc[-1]
     return data[~last], data[last]
+
+
+# --- Contract voor elke RacePredictor ---
+
+
+def _model_factory(family: str) -> Callable[[], RacePredictor]:
+    params = {} if family == "ridge" else FAST
+    return partial(MODEL_FAMILIES[family], FEATURES, **params)
+
+
+# Beide baselines plus elke familie uit MODEL_FAMILIES: een nieuw model valt automatisch onder
+# dit contract (zie `RacePredictor` in models/baselines.py).
+ALL_PREDICTORS: dict[str, Callable[[], RacePredictor]] = {
+    "qualifying_position": QualifyingPositionBaseline,
+    "championship_points": ChampionshipPointsBaseline,
+    **{family: _model_factory(family) for family in MODEL_FAMILIES},
+}
+
+
+@pytest.mark.parametrize("make_predictor", ALL_PREDICTORS.values(), ids=list(ALL_PREDICTORS))
+def test_every_predictor_returns_unique_ranks_without_race_labels(make_predictor):
+    train, race = _split(_table())
+    race = race.set_index(pd.Index([30, 10, 20, 50, 40, 60]))
+    train_before, race_before = train.copy(), race.copy()
+
+    predictor = make_predictor().fit(train)
+    with_labels = predictor.predict(race)
+    # De uitslag van de voorspelde race is een label: zonder die kolommen dezelfde voorspelling.
+    without_labels = predictor.predict(race.drop(columns=LABEL_COLUMNS))
+
+    assert with_labels.index.equals(race.index)
+    assert sorted(with_labels.tolist()) == list(range(1, len(race) + 1))
+    pd.testing.assert_series_equal(with_labels, without_labels)
+    # `fit` en `predict` passen hun invoer niet aan.
+    pd.testing.assert_frame_equal(train, train_before)
+    pd.testing.assert_frame_equal(race, race_before)
 
 
 # --- XGBoost-voorspellers ---
@@ -72,20 +122,6 @@ def test_ndcg_ranker_gets_top_of_field_right():
 
     top = race["finish_position"] <= 3
     assert predicted[top].tolist() == race.loc[top, "finish_position"].tolist()
-
-
-@pytest.mark.parametrize("predictor_class", XGB_PREDICTORS)
-def test_xgboost_predictors_return_unique_ranks_without_race_labels(predictor_class):
-    train, race = _split(_table())
-    race = race.set_index(pd.Index([30, 10, 20, 50, 40, 60]))
-    predictor = predictor_class(FEATURES, **FAST).fit(train)
-
-    with_labels = predictor.predict(race)
-    without_labels = predictor.predict(race.drop(columns=LABEL_COLUMNS))
-
-    assert with_labels.index.equals(race.index)
-    assert sorted(with_labels.tolist()) == list(range(1, len(race) + 1))
-    pd.testing.assert_series_equal(with_labels, without_labels)
 
 
 @pytest.mark.parametrize("predictor_class", XGB_PREDICTORS)

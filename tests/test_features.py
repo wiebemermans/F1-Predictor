@@ -332,6 +332,9 @@ def test_changing_race_result_does_not_change_features_of_that_race(race_number)
     perturbed.loc[is_race, "points"] = 99.0
     perturbed.loc[is_race, "laps"] = 1
     perturbed.loc[is_race, "sprint_points"] = 42.0
+    # Geen label, maar pas na het voorspelmoment definitief: de startgrid met gridstraffen en
+    # pitlane-starts. Features van race N gebruiken `quali_position`, niet `grid`.
+    perturbed.loc[is_race, "grid"] = 0
     columns = feature_columns()
 
     original = build_features(data)

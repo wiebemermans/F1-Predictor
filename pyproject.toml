@@ -32,6 +32,7 @@ dev = [
     "jupyter>=1.1.1",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.16.10",
 ]
 
@@ -49,3 +50,13 @@ select = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# `uv run pytest --cov` meet de dekking en faalt onder `fail_under` (zie docs/testing.md).
+[tool.coverage.run]
+source = ["f1_predictor"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 90
