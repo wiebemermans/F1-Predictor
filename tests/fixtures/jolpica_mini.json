@@ -1,0 +1,132 @@
+{
+  "_beschrijving": "Mini-dataset voor tests/test_pipeline.py: race-blokken per API-pad, zoals Jolpica ze in MRData.RaceTable.Races teruggeeft. Structuur en veldnamen volgen de echte API (alleen de velden die data/parse.py leest, plus enkele herkenningsvelden); coureurs, teams en uitslagen zijn verzonnen. 2023-1: pitlane-start (fay, grid 0 na P6 in de kwalificatie), statussen uit het oude vocabulaire. 2023-2: sprintweekend, dex zonder kwalificatietijd. 2024-1: zelfde circuit als 2023-1, statussen uit het nieuwe vocabulaire. 2024-2: alleen kwalificatie (race nog niet gereden), rookie gus vervangt fay.",
+  "2023/results": [
+    {
+      "season": "2023", "round": "1", "raceName": "Alpha Grand Prix",
+      "Circuit": {"circuitId": "alpha_ring", "circuitName": "Alpha Ring"},
+      "date": "2023-03-05", "time": "15:00:00Z",
+      "Results": [
+        {"number": "1", "position": "1", "positionText": "1", "points": "25", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "1", "laps": "57", "status": "Finished"},
+        {"number": "3", "position": "2", "positionText": "2", "points": "18", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "2", "laps": "57", "status": "Finished"},
+        {"number": "5", "position": "3", "positionText": "3", "points": "15", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "4", "laps": "57", "status": "Finished"},
+        {"number": "2", "position": "4", "positionText": "4", "points": "12", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "3", "laps": "57", "status": "Finished"},
+        {"number": "6", "position": "5", "positionText": "5", "points": "10", "Driver": {"driverId": "fay", "code": "FAY"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "0", "laps": "56", "status": "+1 Lap"},
+        {"number": "4", "position": "6", "positionText": "R", "points": "0", "Driver": {"driverId": "dex", "code": "DEX"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "5", "laps": "30", "status": "Engine"}
+      ]
+    },
+    {
+      "season": "2023", "round": "2", "raceName": "Bravo Grand Prix",
+      "Circuit": {"circuitId": "bravo_park", "circuitName": "Bravo Park"},
+      "date": "2023-03-19", "time": "14:00:00Z",
+      "Results": [
+        {"number": "2", "position": "1", "positionText": "1", "points": "25", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "1", "laps": "60", "status": "Finished"},
+        {"number": "1", "position": "2", "positionText": "2", "points": "18", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "2", "laps": "60", "status": "Finished"},
+        {"number": "3", "position": "3", "positionText": "3", "points": "15", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "4", "laps": "60", "status": "Finished"},
+        {"number": "5", "position": "4", "positionText": "4", "points": "12", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "3", "laps": "60", "status": "Finished"},
+        {"number": "4", "position": "5", "positionText": "5", "points": "10", "Driver": {"driverId": "dex", "code": "DEX"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "6", "laps": "59", "status": "+1 Lap"},
+        {"number": "6", "position": "6", "positionText": "6", "points": "8", "Driver": {"driverId": "fay", "code": "FAY"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "5", "laps": "59", "status": "+1 Lap"}
+      ]
+    }
+  ],
+  "2023/qualifying": [
+    {
+      "season": "2023", "round": "1", "raceName": "Alpha Grand Prix",
+      "Circuit": {"circuitId": "alpha_ring", "circuitName": "Alpha Ring"},
+      "date": "2023-03-05", "time": "15:00:00Z",
+      "QualifyingResults": [
+        {"number": "1", "position": "1", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "3", "position": "2", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}},
+        {"number": "2", "position": "3", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "5", "position": "4", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}},
+        {"number": "4", "position": "5", "Driver": {"driverId": "dex", "code": "DEX"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}},
+        {"number": "6", "position": "6", "Driver": {"driverId": "fay", "code": "FAY"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}}
+      ]
+    },
+    {
+      "season": "2023", "round": "2", "raceName": "Bravo Grand Prix",
+      "Circuit": {"circuitId": "bravo_park", "circuitName": "Bravo Park"},
+      "date": "2023-03-19", "time": "14:00:00Z",
+      "QualifyingResults": [
+        {"number": "2", "position": "1", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "1", "position": "2", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "5", "position": "3", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}},
+        {"number": "3", "position": "4", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}},
+        {"number": "6", "position": "5", "Driver": {"driverId": "fay", "code": "FAY"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}}
+      ]
+    }
+  ],
+  "2023/sprint": [
+    {
+      "season": "2023", "round": "2", "raceName": "Bravo Grand Prix",
+      "Circuit": {"circuitId": "bravo_park", "circuitName": "Bravo Park"},
+      "date": "2023-03-19", "time": "14:00:00Z",
+      "SprintResults": [
+        {"number": "2", "position": "1", "positionText": "1", "points": "8", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "1", "laps": "20", "status": "Finished"},
+        {"number": "1", "position": "2", "positionText": "2", "points": "7", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "2", "laps": "20", "status": "Finished"},
+        {"number": "3", "position": "3", "positionText": "3", "points": "6", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "4", "laps": "20", "status": "Finished"},
+        {"number": "5", "position": "4", "positionText": "4", "points": "5", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "3", "laps": "20", "status": "Finished"},
+        {"number": "6", "position": "5", "positionText": "5", "points": "4", "Driver": {"driverId": "fay", "code": "FAY"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "5", "laps": "20", "status": "Finished"},
+        {"number": "4", "position": "6", "positionText": "6", "points": "3", "Driver": {"driverId": "dex", "code": "DEX"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "6", "laps": "20", "status": "Finished"}
+      ]
+    }
+  ],
+  "2024/results": [
+    {
+      "season": "2024", "round": "1", "raceName": "Alpha Grand Prix",
+      "Circuit": {"circuitId": "alpha_ring", "circuitName": "Alpha Ring"},
+      "date": "2024-03-03", "time": "15:00:00Z",
+      "Results": [
+        {"number": "3", "position": "1", "positionText": "1", "points": "25", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "1", "laps": "57", "status": "Finished"},
+        {"number": "1", "position": "2", "positionText": "2", "points": "18", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "2", "laps": "57", "status": "Finished"},
+        {"number": "4", "position": "3", "positionText": "3", "points": "15", "Driver": {"driverId": "dex", "code": "DEX"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}, "grid": "4", "laps": "57", "status": "Finished"},
+        {"number": "2", "position": "4", "positionText": "4", "points": "12", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}, "grid": "3", "laps": "57", "status": "Finished"},
+        {"number": "6", "position": "5", "positionText": "5", "points": "10", "Driver": {"driverId": "fay", "code": "FAY"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "6", "laps": "56", "status": "Lapped"},
+        {"number": "5", "position": "6", "positionText": "R", "points": "0", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}, "grid": "5", "laps": "12", "status": "Retired"}
+      ]
+    }
+  ],
+  "2024/qualifying": [
+    {
+      "season": "2024", "round": "1", "raceName": "Alpha Grand Prix",
+      "Circuit": {"circuitId": "alpha_ring", "circuitName": "Alpha Ring"},
+      "date": "2024-03-03", "time": "15:00:00Z",
+      "QualifyingResults": [
+        {"number": "3", "position": "1", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}},
+        {"number": "1", "position": "2", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "2", "position": "3", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "4", "position": "4", "Driver": {"driverId": "dex", "code": "DEX"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}},
+        {"number": "5", "position": "5", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}},
+        {"number": "6", "position": "6", "Driver": {"driverId": "fay", "code": "FAY"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}}
+      ]
+    },
+    {
+      "season": "2024", "round": "2", "raceName": "Bravo Grand Prix",
+      "Circuit": {"circuitId": "bravo_park", "circuitName": "Bravo Park"},
+      "date": "2024-03-17", "time": "14:00:00Z",
+      "QualifyingResults": [
+        {"number": "1", "position": "1", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "7", "position": "2", "Driver": {"driverId": "gus", "code": "GUS"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}},
+        {"number": "3", "position": "3", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}},
+        {"number": "2", "position": "4", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "5", "position": "5", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}},
+        {"number": "4", "position": "6", "Driver": {"driverId": "dex", "code": "DEX"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}}
+      ]
+    }
+  ],
+  "2024/sprint": [],
+  "2024/2/qualifying": [
+    {
+      "season": "2024", "round": "2", "raceName": "Bravo Grand Prix",
+      "Circuit": {"circuitId": "bravo_park", "circuitName": "Bravo Park"},
+      "date": "2024-03-17", "time": "14:00:00Z",
+      "QualifyingResults": [
+        {"number": "1", "position": "1", "Driver": {"driverId": "ada", "code": "ADA"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "7", "position": "2", "Driver": {"driverId": "gus", "code": "GUS"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}},
+        {"number": "3", "position": "3", "Driver": {"driverId": "cora", "code": "COR"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}},
+        {"number": "2", "position": "4", "Driver": {"driverId": "ben", "code": "BEN"}, "Constructor": {"constructorId": "alpha", "name": "Alpha"}},
+        {"number": "5", "position": "5", "Driver": {"driverId": "eli", "code": "ELI"}, "Constructor": {"constructorId": "charlie", "name": "Charlie"}},
+        {"number": "4", "position": "6", "Driver": {"driverId": "dex", "code": "DEX"}, "Constructor": {"constructorId": "bravo", "name": "Bravo"}}
+      ]
+    }
+  ]
+}
