@@ -34,7 +34,8 @@ De importnaam is `f1_predictor`; de installeerbare CLI heet `f1`.
 - `src/f1_predictor/models/`: voorspellers (baselines, Ridge, XGBoost-regressie en -ranker),
   modelspecificaties, het trainen van het eindmodel en het voorspellen van één race.
 - `src/f1_predictor/evaluation/`: data-exploratie, metrics, backtests en modelselectie.
-- `tests/`: offline tests met synthetische data.
+- `tests/`: offline tests met synthetische data; `tests/fixtures/` bevat de mini-dataset in
+  Jolpica-formaat voor de integratietest.
 - `notebooks/`: API-verkenning en experimenten.
 - `data/raw/` en `data/processed/`: lokale parquet-data (ruw en featuretabel); deze wordt
   niet in Git bijgehouden.
@@ -54,6 +55,9 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
+`uv run pytest --cov` meet daarbij de coverage en faalt onder 90%. Wat elke test afdekt, de
+integratietest en richtlijnen voor nieuwe tests staan in [testing.md](testing.md).
+
 Installeer desgewenst de Git-hooks; die controleren Ruff en algemene
 bestandsconventies vóór een commit:
 
@@ -62,6 +66,7 @@ uv run pre-commit install
 uv run pre-commit run --all-files
 ```
 
-GitHub Actions voert `uv sync --locked`, Ruff en pytest uit op pushes naar
-`main` en op pull requests. De CI-configuratie staat in
+GitHub Actions voert `uv sync --locked`, Ruff en pytest met coverage
+(ondergrens 90%) uit op pushes naar `main` en op pull requests, en zet de
+coveragetabel in de samenvatting van de run. De CI-configuratie staat in
 `.github/workflows/ci.yml`.

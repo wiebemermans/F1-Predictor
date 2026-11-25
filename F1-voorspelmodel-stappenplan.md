@@ -297,12 +297,12 @@ backtest:
 
 ## Fase 9: Tests uitbreiden (doorlopend)
 
-- [ ] Unit tests voor metrics, feature-functies en baselines
-- [ ] Leakage-test (zie fase 6)
-- [ ] Integratietest met een mini-dataset (2-3 races) door de hele pipeline
-- [ ] Coverage meten met `pytest-cov` (zinnig percentage, geen 100%-obsessie)
-- [ ] CI draait alle tests bij elke pull request
-- [ ] **Documentatie bijwerken:** beschrijf hoe je tests en coverage lokaal uitvoert, wat de integratietest afdekt en hoe leakage- en CI-controles werken (bijvoorbeeld in `docs/testing.md`).
+- [x] Unit tests voor metrics, feature-functies en baselines (aangevuld met de retries van de Jolpica-client, ongeldige invoer en de ontbrekende CLI-paden)
+- [x] Leakage-test (zie fase 6), nu op drie niveaus: features (ook `grid` van race N), een contracttest voor elke `RacePredictor` (zelfde voorspelling zonder labelkolommen) en backtest/voorspelling
+- [x] Integratietest met een mini-dataset (3 gereden races en 1 komende race, `tests/fixtures/jolpica_mini.json`) door de hele CLI-pipeline, met een vangnet dat faalt als de repo-uitvoer wijzigt
+- [x] Coverage meten met `pytest-cov` (zinnig percentage, geen 100%-obsessie): branch coverage, ondergrens 90%, bij afronding 96,8%
+- [x] CI draait alle tests bij elke pull request, nu met coverage en een coveragetabel in de samenvatting van de run
+- [x] **Documentatie bijgewerkt:** tests en coverage lokaal uitvoeren, overzicht per testbestand, wat de integratietest afdekt, leakage- en CI-controles en richtlijnen voor nieuwe tests staan in [`docs/testing.md`](docs/testing.md).
 
 ---
 

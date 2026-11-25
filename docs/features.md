@@ -138,13 +138,17 @@ synthetische data met twee seizoenen, zes races, twee circuits, wisselende statu
 sprint:
 
 1. **Uitslag van race N wijzigen.** Voor elke race worden `finish_position`, `position_text`,
-   `status`, `points`, `laps` en `sprint_points` van race N veranderd. De features van race N
+   `status`, `points`, `laps` en `sprint_points` van race N veranderd, en ook `grid`: de
+   definitieve startgrid is op het voorspelmoment nog niet bekend. De features van race N
    moeten identiek blijven. Als controle dat de test iets meet, moeten de features van latere
    races wél veranderen.
 2. **Toekomst weglaten.** De features van race N zijn gelijk, of de races na N nu in de data
    zitten of niet. Dit vangt ook globale normalisatie en gecentreerde vensters.
 3. **Teamgenoot in dezelfde race.** Andere uitslagen in race N veranderen de teamvorm van race N
    niet.
+
+Hoe leakage daarnaast bij de voorspellers en de backtest wordt getest, staat in
+[testing.md](testing.md#leakage-bewaken).
 
 Tests 1 en 2 draaien met alle groepen aan, dus nieuwe groepen vallen er automatisch onder. Om de
 tests zelf te controleren zijn tijdens de ontwikkeling bewust twee lekken ingebouwd: een rolling

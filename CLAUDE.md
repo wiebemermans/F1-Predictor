@@ -16,6 +16,8 @@ the Jolpica-F1 API (Ergast-compatible). Personal hobby project, built phase by p
   `docs/model.md`.
 - CLI commands, `config/config.yaml` fields, output files and the JSON contract for a website:
   `docs/usage.md`.
+- Test overview, coverage floor, the end-to-end CLI test, leakage checks and rules for new
+  tests: `docs/testing.md`.
 
 ## Language
 
@@ -27,6 +29,7 @@ convention in new code and docs. Identifiers are English.
 ```powershell
 uv sync --locked                 # install
 uv run pytest                    # tests (offline, synthetic data)
+uv run pytest --cov              # tests + branch coverage; fails below 90% (as in CI)
 uv run ruff check .              # lint
 uv run ruff format --check .     # format check (CI runs all three)
 uv run f1 fetch                           # data -> data/raw/results_{season}.parquet (config: data)
@@ -79,6 +82,12 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
   field is removed or renamed (contract in `docs/usage.md`).
 - `src/f1_predictor/paths.py` – all paths (`CONFIG_PATH`, `RAW_DIR`, `CACHE_DIR`,
   `PROCESSED_DIR`, `OUTPUT_DIR`, `PREDICTIONS_DIR`). Use these instead of relative paths.
+  Library defaults like `data_dir=RAW_DIR` are bound at import, so tests pass explicit paths.
+- `tests/` – one file per module area; `test_models.py` holds the contract test every
+  `RacePredictor` (both baselines + each family in `MODEL_FAMILIES`) must pass.
+  `test_pipeline.py` runs the whole CLI on `tests/fixtures/jolpica_mini.json` with paths
+  redirected to a temp folder; a new command that writes files needs a redirect there, or the
+  repo-snapshot guard fails the test. Tests never read `data/` and never write to `output/`.
 - `data/` is git-ignored; `output/` CSVs and JSON are committed on purpose.
 
 ## Domain rules that are easy to get wrong

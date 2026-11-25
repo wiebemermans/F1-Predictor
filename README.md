@@ -20,6 +20,7 @@ Dit project is grotendeels ontwikkeld met hulp van een large language model (LLM
 - [Fase 6: features, leakage-tests en experimentenlogboek](docs/features.md)
 - [Fase 7: model, tuning en vergelijking met de baselines](docs/model.md)
 - [Gebruik: configuratie, CLI-commando's en JSON-uitvoer](docs/usage.md)
+- [Fase 9: tests, coverage, integratietest en CI](docs/testing.md)
 - [Volledig stappenplan](F1-voorspelmodel-stappenplan.md)
 
 ## Snel starten
