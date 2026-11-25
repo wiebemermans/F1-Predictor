@@ -408,5 +408,7 @@ functie in het pakket opgenomen.
   reglementswissels.
 - **Terug naar fase 6 voor sterkere features:** kwalificatietijden (gat tot pole) en team-ID's
   koppelen bij naamswijzigingen.
-- **Fase 10:** de volgende race automatisch bepalen en `f1 predict` na elke kwalificatie
-  laten draaien; na de race de voorspelling met de uitslag vergelijken.
+- **Fase 10 (gedaan):** de volgende race wordt automatisch bepaald en na elke kwalificatie
+  voorspeld; na de race zet `f1 evaluate` de voorspelling naast de uitslag
+  ([automation.md](automation.md)). De cijfers in dit document zijn een momentopname bij het
+  afronden van fase 7; `output/` loopt sindsdien met elke race mee.

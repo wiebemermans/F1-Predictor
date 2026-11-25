@@ -26,14 +26,17 @@ De importnaam is `f1_predictor`; de installeerbare CLI heet `f1`.
 
 - `config/config.yaml`: projectconfiguratie (seizoenen, features, gekozen modellen, backtest);
   velden en commando's staan in [usage.md](usage.md).
-- `src/f1_predictor/cli.py`: de commando's `f1 fetch`, `features`, `backtest`, `tune`, `train`
-  en `predict`; `config.py` leest en valideert de configuratie.
-- `src/f1_predictor/data/`: Jolpica-client, parsing en seizoensbestanden.
+- `src/f1_predictor/cli.py`: de commando's `f1 fetch`, `features`, `backtest`, `tune`, `train`,
+  `predict` en `evaluate`; `config.py` leest en valideert de configuratie.
+- `src/f1_predictor/data/`: Jolpica-client, parsing, seizoensbestanden en de racekalender.
 - `src/f1_predictor/features/`: featuregroepen (`groups.py`) en de featuretabel met
   `FeatureConfig` (`build.py`).
 - `src/f1_predictor/models/`: voorspellers (baselines, Ridge, XGBoost-regressie en -ranker),
   modelspecificaties, het trainen van het eindmodel en het voorspellen van één race.
-- `src/f1_predictor/evaluation/`: data-exploratie, metrics, backtests en modelselectie.
+- `src/f1_predictor/evaluation/`: data-exploratie, metrics, backtests, modelselectie en de
+  historiek van voorspellingen vooraf tegen de uitslag.
+- `.github/workflows/`: CI (`ci.yml`) en de automatisering (`predict.yml`, `post-race.yml`, zie
+  [automation.md](automation.md)).
 - `tests/`: offline tests met synthetische data; `tests/fixtures/` bevat de mini-dataset in
   Jolpica-formaat voor de integratietest.
 - `notebooks/`: API-verkenning en experimenten.
@@ -69,4 +72,5 @@ uv run pre-commit run --all-files
 GitHub Actions voert `uv sync --locked`, Ruff en pytest met coverage
 (ondergrens 90%) uit op pushes naar `main` en op pull requests, en zet de
 coveragetabel in de samenvatting van de run. De CI-configuratie staat in
-`.github/workflows/ci.yml`.
+`.github/workflows/ci.yml`. Twee geplande workflows voorspellen elke race en werken na de race de
+backtests bij; die staan in [automation.md](automation.md).

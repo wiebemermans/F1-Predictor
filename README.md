@@ -21,6 +21,7 @@ Dit project is grotendeels ontwikkeld met hulp van een large language model (LLM
 - [Fase 7: model, tuning en vergelijking met de baselines](docs/model.md)
 - [Gebruik: configuratie, CLI-commando's en JSON-uitvoer](docs/usage.md)
 - [Fase 9: tests, coverage, integratietest en CI](docs/testing.md)
+- [Fase 10: automatisering met GitHub Actions](docs/automation.md)
 - [Volledig stappenplan](F1-voorspelmodel-stappenplan.md)
 
 ## Snel starten
@@ -39,6 +40,12 @@ uv run f1 predict --season 2026 --round 22     # na de kwalificatie, vóór de r
 `output/predictions/`. Een voorspelling kan pas na de kwalificatie: die levert de deelnemers en
 startposities. Instellingen staan in [`config/config.yaml`](config/config.yaml); alle
 commando's, configuratievelden en het JSON-formaat staan in [docs/usage.md](docs/usage.md).
+
+Elk raceweekend gebeurt dat ook automatisch: een GitHub Actions-workflow voorspelt de volgende
+race zodra de kwalificatie verwerkt is (`f1 predict --next`) en commit de JSON in
+`output/predictions/`. Na de race worden de backtests bijgewerkt en zet
+`output/prediction_history.json` elke voorspelling van vooraf naast de uitslag. Zie
+[docs/automation.md](docs/automation.md).
 
 ## Backtests en model
 
