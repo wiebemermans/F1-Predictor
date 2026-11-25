@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0 # volledige historie, zodat `git pull --rebase` werkt
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0 # deze actie heeft geen verschuivende v10-tag
         with:
           enable-cache: true
           cache-suffix: automation # andere pakketten dan ci.yml, dus een eigen cache
