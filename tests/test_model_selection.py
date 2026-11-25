@@ -20,6 +20,7 @@ from f1_predictor.evaluation.model_selection import (
     summarize_backtest,
     summarize_periods,
     tuning_candidates,
+    write_comparison_json,
 )
 from f1_predictor.features.build import FeatureConfig, build_features, feature_columns
 from f1_predictor.models.train import FEATURE_SETS, ModelSpec, train_final_model
@@ -314,6 +315,23 @@ def test_comparison_payload_groups_models_per_period_with_family():
     assert holdout["xgb_ranker_d2_n5_all"]["family"] == "xgb_ranker"
     assert holdout["xgb_ranker_d2_n5_all"]["delta_mae"] == pytest.approx(0.5)
     assert payload["run"] == {"git_commit": "abc"}
+
+
+def test_comparison_json_is_only_rewritten_when_the_content_changes(tmp_path):
+    results = _results("qualifying_position", [3.0, 4.0], [1, 0]).assign(season=[2021, 2022])
+    summary = summarize_periods(results)
+    path = tmp_path / "model_comparison.json"
+
+    write_comparison_json(summary, {}, "qualifying_position", {"git_commit": "a"}, path)
+    text = path.read_text(encoding="utf-8")
+    # Zelfde races, andere commit: geen nieuwe versie en dus geen commit in een geplande run.
+    write_comparison_json(summary, {}, "qualifying_position", {"git_commit": "b"}, path)
+    assert path.read_text(encoding="utf-8") == text
+
+    write_comparison_json(summary, {}, "ander_model", {"git_commit": "b"}, path)
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["final_model"] == "ander_model"
+    assert saved["run"] == {"git_commit": "b"}
 
 
 def test_cli_backtest_runs_the_chosen_suite_with_configured_settings(tmp_path, monkeypatch):

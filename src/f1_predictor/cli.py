@@ -222,6 +222,5 @@ def predict(
         _fail(str(error))
     except (JolpicaError, requests.RequestException) as error:
         _fail(f"Jolpica-API niet bereikbaar: {error}")
-    path = write_prediction(payload)
+    write_prediction(payload)
     typer.echo(format_prediction(payload))
-    log.info("Voorspelling opgeslagen: %s", path)

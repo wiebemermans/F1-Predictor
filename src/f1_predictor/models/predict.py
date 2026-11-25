@@ -24,7 +24,7 @@ from f1_predictor.data.fetch import fetch_race_entry, fetch_schedule
 from f1_predictor.data.jolpica import JolpicaClient
 from f1_predictor.evaluation.backtest import _load_raw_results
 from f1_predictor.features.build import build_features
-from f1_predictor.output import json_ready, write_atomic, write_json
+from f1_predictor.output import json_ready, read_json, write_atomic, write_json_if_changed
 from f1_predictor.paths import PREDICTIONS_DIR, RAW_DIR
 from f1_predictor.runinfo import run_metadata, utc_now
 
@@ -200,32 +200,55 @@ def prediction_path(season: int, round_number: int, output_dir: Path = PREDICTIO
 
 
 def write_prediction(payload: Mapping[str, Any], output_dir: Path = PREDICTIONS_DIR) -> Path:
-    """Schrijf de voorspelling naar `{seizoen}-{ronde}.json` en werk `latest.json` bij."""
+    """Schrijf de voorspelling naar `{seizoen}-{ronde}.json` en werk `latest.json` bij.
+
+    Het bestand wordt alleen herschreven als de inhoud verandert (`generated_at` en `run`
+    tellen niet mee), zodat een geplande run zonder nieuws geen commit maakt. Een voorspelling
+    van vóór de race (`result_known: false`) wordt nooit vervangen door een retrospectieve:
+    alleen die eerste is een echte voorspelling vooraf, en `f1 evaluate` scoort precies die.
+    """
     race = payload["race"]
     path = prediction_path(race["season"], race["round"], output_dir)
-    write_json(path, payload)
+    existing = read_json(path)
+    if payload["result_known"] and existing is not None and existing.get("result_known") is False:
+        log.warning(
+            "%s bevat de voorspelling van vóór de race; die blijft staan en de retrospectieve "
+            "voorspelling wordt niet opgeslagen",
+            path,
+        )
+    elif write_json_if_changed(path, payload):
+        log.info("Voorspelling opgeslagen: %s", path)
+    else:
+        log.info("Voorspelling ongewijzigd, niet herschreven: %s", path)
     _update_latest(output_dir)
     return path
+
+
+def saved_predictions(output_dir: Path = PREDICTIONS_DIR) -> list[tuple[tuple[int, int], Path]]:
+    """Alle opgeslagen voorspellingen als ((seizoen, ronde), pad), chronologisch."""
+    saved = []
+    for path in output_dir.glob("*.json"):
+        match = _PREDICTION_FILE.fullmatch(path.name)
+        if match:
+            saved.append(((int(match[1]), int(match[2])), path))
+    return sorted(saved)
 
 
 def _update_latest(output_dir: Path) -> None:
     """`latest.json` volgt de chronologisch laatste voorspelde race.
 
     Niet het laatst geschreven bestand: een test op een oude race mag de voorspelling voor
-    de komende race niet vervangen.
+    de komende race niet vervangen. Een ongewijzigde kopie wordt niet opnieuw geschreven.
     """
-    saved = []
-    for path in output_dir.glob("*.json"):
-        match = _PREDICTION_FILE.fullmatch(path.name)
-        if match:
-            saved.append(((int(match[1]), int(match[2])), path))
+    saved = saved_predictions(output_dir)
     if not saved:
         return
-    _, latest = max(saved)
+    _, latest = saved[-1]
     text = latest.read_text(encoding="utf-8")
-    write_atomic(
-        output_dir / LATEST_NAME, lambda temporary: temporary.write_text(text, encoding="utf-8")
-    )
+    latest_path = output_dir / LATEST_NAME
+    if latest_path.exists() and latest_path.read_text(encoding="utf-8") == text:
+        return
+    write_atomic(latest_path, lambda temporary: temporary.write_text(text, encoding="utf-8"))
 
 
 def format_prediction(payload: Mapping[str, Any]) -> str:

@@ -27,7 +27,7 @@ from f1_predictor.models.predict import (
     write_prediction,
 )
 from f1_predictor.models.train import ModelSpec
-from f1_predictor.output import json_ready
+from f1_predictor.output import json_ready, read_json, write_json_if_changed
 
 POINTS = {1: 25.0, 2: 18.0, 3: 15.0, 4: 12.0, 5: 10.0}
 SMALL_PARAMS = {
@@ -394,6 +394,74 @@ def test_latest_json_follows_the_chronologically_latest_race(tmp_path):
         "2023-03.json",
         "latest.json",
     ]
+
+
+def test_unchanged_prediction_is_not_rewritten(tmp_path, caplog):
+    caplog.set_level(logging.INFO)
+    payload = predict_race(2023, 3, _project(), _raw_dir(tmp_path))
+    output_dir = tmp_path / "predictions"
+    path = write_prediction(payload, output_dir)
+    files = (path, output_dir / "latest.json")
+    before = [file.stat().st_mtime_ns for file in files]
+
+    # Een latere run: alleen tijdstip en herkomst verschillen.
+    later = {**payload, "generated_at": "2099-01-01T00:00:00+00:00", "run": {"git_commit": "x"}}
+    write_prediction(later, output_dir)
+
+    assert [file.stat().st_mtime_ns for file in files] == before
+    assert _strict_json(path.read_text(encoding="utf-8"))["generated_at"] == payload["generated_at"]
+    assert "Voorspelling ongewijzigd" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("existing_known", "new_known", "rewritten"),
+    [
+        (False, True, False),  # een retrospectieve voorspelling vervangt nooit die van vooraf
+        (False, False, True),  # bv. een gecorrigeerde kwalificatie vóór de race
+        (True, True, True),
+        (True, False, True),
+    ],
+)
+def test_prediction_overwrite_rules(tmp_path, caplog, existing_known, new_known, rewritten):
+    payload = predict_race(2023, 3, _project(), _raw_dir(tmp_path))
+    output_dir = tmp_path / "predictions"
+    write_prediction({**payload, "result_known": existing_known}, output_dir)
+    changed = {**payload, "result_known": new_known, "predictions": payload["predictions"][::-1]}
+
+    path = write_prediction(changed, output_dir)
+
+    saved = _strict_json(path.read_text(encoding="utf-8"))
+    assert (saved["predictions"] == changed["predictions"]) is rewritten
+    assert saved["result_known"] is (new_known if rewritten else existing_known)
+    assert _strict_json((output_dir / "latest.json").read_text(encoding="utf-8")) == saved
+    assert ("blijft staan" in caplog.text) is not rewritten
+
+
+def test_write_json_if_changed_ignores_generated_at_and_run(tmp_path):
+    path = tmp_path / "uitvoer.json"
+    first = {"schema_version": 1, "generated_at": "2026-11-28T18:17:00+00:00", "value": 1.5}
+    first["run"] = {"git_commit": "a"}
+
+    assert write_json_if_changed(path, first) is True
+    text = path.read_text(encoding="utf-8")
+    later = {**first, "generated_at": "2026-11-28T21:17:00+00:00", "run": {"git_commit": "b"}}
+    assert write_json_if_changed(path, later) is False
+    assert path.read_text(encoding="utf-8") == text
+    assert write_json_if_changed(path, {**later, "value": float("nan")}) is True
+    assert read_json(path)["value"] is None
+    assert read_json(path)["run"] == {"git_commit": "b"}
+
+
+def test_write_json_if_changed_overwrites_an_unreadable_file(tmp_path, caplog):
+    path = tmp_path / "uitvoer.json"
+    path.write_text("{kapot", encoding="utf-8")
+
+    assert write_json_if_changed(path, {"value": 1}) is True
+    assert read_json(path) == {"value": 1}
+    assert "geen geldige JSON" in caplog.text
+    path.write_text("[1, 2]", encoding="utf-8")
+    assert read_json(path) is None
+    assert read_json(tmp_path / "ontbreekt.json") is None
 
 
 def test_json_ready_turns_missing_values_into_null():
