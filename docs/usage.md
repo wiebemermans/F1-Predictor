@@ -73,6 +73,7 @@ race om te voorspellen is geen fout (exitcode 0).
 | `f1 predict --season J --round R` | voorspelt één race na de kwalificatie | seconden |
 | `f1 predict --next` | voorspelt de volgende race volgens de kalender, zodra de kwalificatie in Jolpica staat; anders niets | seconden |
 | `f1 evaluate` | zet elke voorspelling van vóór de race naast de uitslag en schrijft `output/prediction_history.json` | seconden |
+| `f1 readme` | zet de top 3 van de laatste voorspelling van vóór de race in `README.md` | seconden |
 
 Voorbeelden:
 
@@ -84,6 +85,7 @@ uv run f1 backtest --suite features        # fase 6: output/backtest_features.cs
 uv run f1 -v predict --season 2026 --round 22
 uv run f1 predict --next                   # de volgende race, als de kwalificatie verwerkt is
 uv run f1 evaluate                         # voorspellingen vooraf tegen de uitslag
+uv run f1 readme                           # top 3 van de laatste voorspelling in README.md
 ```
 
 ### Hoe `f1 predict` werkt
@@ -123,6 +125,23 @@ Beperkingen:
 - Voor ronde 1 van een nieuw seizoen kan `f1 predict` niet controleren of het vorige seizoen
   lokaal compleet is. Voer na de laatste race van het jaar dus `f1 fetch` uit.
 
+### Top 3 in de README (`f1 readme`)
+
+`f1 readme` zoekt in `output/predictions/` de chronologisch laatste voorspelling van vóór de
+race (`result_known: false`; retrospectieve voorspellingen tellen niet mee). Het zet daarvan de
+racenaam, het model en de top 3 (coureur, team, kwalificatiepositie) met een link naar de JSON
+tussen `<!-- voorspelling:start -->` en `<!-- voorspelling:end -->` in `README.md`. De rest van
+de README blijft ongemoeid, net als de regeleinden.
+
+- Het bestand wordt alleen herschreven als het blok verandert: bij een nieuwe GP, of als een
+  gecorrigeerde kwalificatie vóór de race een andere top 3 geeft. Een run zonder nieuws
+  verandert niets.
+- Zonder voorspelling van vóór de race blijft de README zoals ze is (exitcode 0).
+- Staan de markeringen niet precies één keer in de README, dan volgt een fout (exitcode 1).
+
+De workflow `predict.yml` draait het na elke `f1 predict --next`
+([automation.md](automation.md#wat-de-workflows-doen)).
+
 ## Uitvoerbestanden
 
 | Bestand | Commando | In git | Inhoud |
@@ -140,6 +159,7 @@ Beperkingen:
 | `output/predictions/{seizoen}-{ronde}.json` | `predict` | ja | voorspelling per race |
 | `output/predictions/latest.json` | `predict` | ja | kopie van de laatste voorspelde race |
 | `output/prediction_history.json` | `evaluate` | ja | voorspellingen van vóór de race naast de uitslag |
+| `README.md` (blok tussen de markeringen) | `readme` | ja | top 3 van de laatste voorspelling van vóór de race |
 
 Alle bestanden worden atomisch geschreven: eerst naar een tijdelijk bestand, daarna hernoemd.
 JSON-bestanden worden alleen herschreven als hun inhoud verandert; tijdstip en `run`-blok tellen

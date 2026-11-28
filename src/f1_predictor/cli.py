@@ -40,6 +40,7 @@ from f1_predictor.models.predict import (
 )
 from f1_predictor.models.train import train_final_model
 from f1_predictor.paths import CONFIG_PATH
+from f1_predictor.readme import ReadmeError, update_readme
 from f1_predictor.runinfo import run_metadata
 
 app = typer.Typer(help="F1-voorspeller", no_args_is_help=True)
@@ -229,6 +230,15 @@ def predict(
         _fail(f"Jolpica-API niet bereikbaar: {error}")
     write_prediction(payload)
     typer.echo(format_prediction(payload))
+
+
+@app.command()
+def readme() -> None:
+    """Zet de top 3 van de laatste voorspelling van vóór de race in README.md."""
+    try:
+        update_readme()
+    except ReadmeError as error:
+        _fail(str(error))
 
 
 @app.command()

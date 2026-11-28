@@ -2,10 +2,11 @@
 
 `f1 fetch` -> `features` -> `backtest` (alle suites) -> `train` -> `predict` -> `evaluate`,
 zoals een nieuwe gebruiker ze uitvoert (zie docs/usage.md). Daarnaast een raceweekend zoals de
-workflows het automatisch doorlopen (docs/automation.md): `predict --next` op verschillende
-momenten, de uitslag die binnenkomt, de backtests en `evaluate`. Jolpica wordt vervangen door de
-fixture `tests/fixtures/jolpica_mini.json` en alle paden wijzen naar een tijdelijke map; verder
-draait de echte code. Elke run loopt één keer per module, de tests controleren elk een stap.
+workflows het automatisch doorlopen (docs/automation.md): `predict --next` en `readme` op
+verschillende momenten, de uitslag die binnenkomt, de backtests en `evaluate`. Jolpica wordt
+vervangen door de fixture `tests/fixtures/jolpica_mini.json` en alle paden wijzen naar een
+tijdelijke map; verder draait de echte code. Elke run loopt één keer per module, de tests
+controleren elk een stap.
 """
 
 import copy
@@ -32,8 +33,12 @@ from f1_predictor.features.build import feature_columns, write_feature_table
 from f1_predictor.models.predict import predict_race, race_to_predict, write_prediction
 from f1_predictor.models.train import train_final_model
 from f1_predictor.paths import ROOT
+from f1_predictor.readme import README_END, README_START, update_readme
 
 FIXTURE = Path(__file__).parent / "fixtures" / "jolpica_mini.json"
+# Vangnet: mist er een omleiding, dan schrijft de pipeline in de repo en faalt de test.
+REPO_PATHS = (ROOT / "data", ROOT / "output", ROOT / "README.md")
+README_PLACEHOLDER = "Nog geen voorspelling."
 CONFIG = {
     "data": {"start_season": 2023, "end_season": 2024},
     "model": {
@@ -55,6 +60,7 @@ COMMANDS = [
     ["predict", "--season", "2024", "--round", "1"],  # al gereden: retrospectieve voorspelling
     ["predict", "--season", "2024", "--round", "2"],  # na de kwalificatie, vóór de race
     ["evaluate"],
+    ["readme"],
 ]
 # Met `min_train_races: 1` is 2023-1 alleen trainingshistorie.
 TEST_RACES = [(2023, 2), (2024, 1)]
@@ -97,11 +103,15 @@ class PipelineRun:
     repo_after: dict[str, tuple[int, int]]
 
 
-def _snapshot(*directories: Path) -> dict[str, tuple[int, int]]:
-    """Grootte en wijzigingstijd van elk bestand, zodat elke schrijfactie opvalt."""
+def _snapshot(*locations: Path) -> dict[str, tuple[int, int]]:
+    """Grootte en wijzigingstijd van elk bestand (of elk bestand in een map)."""
     files = {}
-    for directory in directories:
-        for path in sorted(directory.rglob("*")) if directory.exists() else []:
+    for location in locations:
+        if location.is_file():
+            paths = [location]
+        else:
+            paths = sorted(location.rglob("*")) if location.exists() else []
+        for path in paths:
             if path.is_file():
                 stat = path.stat()
                 files[str(path)] = (stat.st_size, stat.st_mtime_ns)
@@ -113,6 +123,12 @@ def _strict_json(path: Path) -> dict:
         raise AssertionError(f"Ongeldige JSON-constante in {path.name}: {constant}")
 
     return json.loads(path.read_text(encoding="utf-8"), parse_constant=reject)
+
+
+def _write_readme(path: Path) -> None:
+    path.write_text(
+        f"# Test\n\n{README_START}\n{README_PLACEHOLDER}\n{README_END}\n", encoding="utf-8"
+    )
 
 
 def _redirects(raw_dir: Path, processed_dir: Path, output_dir: Path, client) -> dict:
@@ -153,6 +169,11 @@ def _redirects(raw_dir: Path, processed_dir: Path, output_dir: Path, client) -> 
         "write_prediction_history": partial(
             write_prediction_history, output_path=output_dir / "prediction_history.json"
         ),
+        "update_readme": partial(
+            update_readme,
+            readme_path=output_dir.parent / "README.md",
+            predictions_dir=output_dir / "predictions",
+        ),
     }
 
 
@@ -164,11 +185,10 @@ def pipeline(tmp_path_factory) -> PipelineRun:
     output_dir = root / "output"
     config_path = root / "config.yaml"
     config_path.write_text(yaml.safe_dump(CONFIG), encoding="utf-8")
+    _write_readme(root / "README.md")
     client = FixtureClient(json.loads(FIXTURE.read_text(encoding="utf-8")))
     redirects = _redirects(raw_dir, processed_dir, output_dir, client)
-    # Vangnet: mist er een omleiding, dan schrijft de pipeline in de repo en faalt de test.
-    repo_dirs = (ROOT / "data", ROOT / "output")
-    repo_before = _snapshot(*repo_dirs)
+    repo_before = _snapshot(*REPO_PATHS)
     stdout = {}
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(fetch_module, "RAW_DIR", raw_dir)
@@ -190,7 +210,7 @@ def pipeline(tmp_path_factory) -> PipelineRun:
         client=client,
         stdout=stdout,
         repo_before=repo_before,
-        repo_after=_snapshot(*repo_dirs),
+        repo_after=_snapshot(*REPO_PATHS),
     )
 
 
@@ -325,6 +345,14 @@ def test_evaluate_skips_retrospective_and_unraced_predictions(pipeline):
     assert pipeline.stdout["evaluate"].startswith("Nog geen voorspellingen")
 
 
+def test_readme_shows_the_upcoming_race_not_the_retrospective_one(pipeline):
+    text = (pipeline.output_dir.parent / "README.md").read_text(encoding="utf-8")
+
+    assert "**Bravo Grand Prix 2024** (ronde 2" in text
+    assert "ronde 1" not in text
+    assert README_PLACEHOLDER not in text
+
+
 # --- Een raceweekend zoals de workflows het doorlopen (docs/automation.md) ---
 
 
@@ -334,6 +362,7 @@ class WeekendRun:
     client: FixtureClient
     stdout: dict[str, str]
     predictions: dict[str, dict[str, tuple[int, int]]]
+    readme: dict[str, str]
     repo_before: dict[str, tuple[int, int]]
     repo_after: dict[str, tuple[int, int]]
 
@@ -342,20 +371,21 @@ class WeekendRun:
 def weekend(tmp_path_factory) -> WeekendRun:
     """Vrijdag tot en met maandag rond 2024-2 (kwalificatie za 15:00Z, race zo 14:00Z).
 
-    Na elke stap wordt de map met voorspellingen vastgelegd, zodat de tests kunnen nagaan
-    wanneer er iets geschreven werd.
+    Na elke stap worden de map met voorspellingen en de README vastgelegd, zodat de tests
+    kunnen nagaan wanneer er iets geschreven werd.
     """
     root = tmp_path_factory.mktemp("weekend")
     raw_dir = root / "data" / "raw"
     output_dir = root / "output"
     config_path = root / "config.yaml"
     config_path.write_text(yaml.safe_dump(CONFIG), encoding="utf-8")
+    readme_path = root / "README.md"
+    _write_readme(readme_path)
     data = copy.deepcopy(json.loads(FIXTURE.read_text(encoding="utf-8")))
     client = FixtureClient(data)
     redirects = _redirects(raw_dir, root / "data" / "processed", output_dir, client)
-    repo_dirs = (ROOT / "data", ROOT / "output")
-    repo_before = _snapshot(*repo_dirs)
-    stdout, predictions = {}, {}
+    repo_before = _snapshot(*REPO_PATHS)
+    stdout, predictions, readme = {}, {}, {}
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(fetch_module, "RAW_DIR", raw_dir)
         for name, function in redirects.items():
@@ -374,21 +404,28 @@ def weekend(tmp_path_factory) -> WeekendRun:
             )
             stdout[label] = result.stdout
             predictions[label] = _snapshot(output_dir / "predictions")
+            readme[label] = readme_path.read_text(encoding="utf-8")
+
+        def scheduled(label: str, now: str) -> None:
+            """Eén run van predict.yml: `predict --next`, daarna `readme`."""
+            run(label, ["predict", "--next"], now)
+            run(f"{label}: readme", ["readme"])
 
         run("fetch", ["fetch"])
-        run("vrijdag", ["predict", "--next"], "2024-03-15T21:17:00+00:00")
+        scheduled("vrijdag", "2024-03-15T21:17:00+00:00")
         # De kwalificatie is begonnen, maar Jolpica heeft de uitslag nog niet verwerkt.
         qualifying = data.pop("2024/2/qualifying")
-        run("tijdens de kwalificatie", ["predict", "--next"], "2024-03-16T15:17:00+00:00")
+        scheduled("tijdens de kwalificatie", "2024-03-16T15:17:00+00:00")
         data["2024/2/qualifying"] = qualifying
-        run("na de kwalificatie", ["predict", "--next"], "2024-03-16T18:17:00+00:00")
-        run("later op zaterdag", ["predict", "--next"], "2024-03-16T21:17:00+00:00")
+        scheduled("na de kwalificatie", "2024-03-16T18:17:00+00:00")
+        scheduled("later op zaterdag", "2024-03-16T21:17:00+00:00")
         # De race is gereden en Jolpica heeft de uitslag verwerkt. 2024 is een afgesloten
         # seizoen voor `fetch` (vóór dit jaar), dus pas `--force` haalt het opnieuw op.
         data["2024/results"].append(data["_uitslag_2024_2"])
         run("fetch na de race", ["fetch", "--force"])
-        run("zondagavond", ["predict", "--next"], "2024-03-17T18:17:00+00:00")
+        scheduled("zondagavond", "2024-03-17T18:17:00+00:00")
         run("retrospectief", ["predict", "--season", "2024", "--round", "2"])
+        run("retrospectief: readme", ["readme"])
         run("backtest baselines", ["backtest", "--suite", "baselines"])
         run("backtest features", ["backtest", "--suite", "features"])
         run("backtest", ["backtest"])
@@ -399,8 +436,9 @@ def weekend(tmp_path_factory) -> WeekendRun:
         client=client,
         stdout=stdout,
         predictions=predictions,
+        readme=readme,
         repo_before=repo_before,
-        repo_after=_snapshot(*repo_dirs),
+        repo_after=_snapshot(*REPO_PATHS),
     )
 
 
@@ -423,6 +461,31 @@ def test_predict_next_waits_for_qualifying_and_writes_once(weekend):
     assert saved["model"]["training"]["last_race"] == {"season": 2024, "round": 1}
     # Een latere run met dezelfde kwalificatie herschrijft niets (geen lege commit).
     assert weekend.predictions["later op zaterdag"] == after_qualifying
+
+
+def test_readme_shows_the_top_three_of_the_pre_race_prediction_once(weekend):
+    # Zolang er geen voorspelling is, blijft de README zoals ze was.
+    assert README_PLACEHOLDER in weekend.readme["vrijdag: readme"]
+    assert weekend.readme["tijdens de kwalificatie: readme"] == weekend.readme["vrijdag"]
+
+    shown = weekend.readme["na de kwalificatie: readme"]
+    saved = _strict_json(weekend.output_dir / "predictions" / "2024-02.json")
+    assert README_PLACEHOLDER not in shown
+    assert "**Bravo Grand Prix 2024** (ronde 2, race op 2024-03-17)" in shown
+    assert "[Volledige voorspelling](output/predictions/2024-02.json)" in shown
+    rows = [line for line in shown.splitlines() if line.startswith("| ") and "Pos" not in line]
+    assert [row.split(" | ")[1] for row in rows] == [
+        row["driver_code"] for row in saved["predictions"][:3]
+    ]
+    # Latere runs, ook na de race en na een retrospectieve voorspelling: niets verandert.
+    later = [
+        "later op zaterdag: readme",
+        "zondagavond: readme",
+        "retrospectief: readme",
+        "evaluate",
+    ]
+    for label in later:
+        assert weekend.readme[label] == shown, label
 
 
 def test_after_the_race_the_pre_race_prediction_is_kept(weekend):

@@ -1,12 +1,15 @@
 name: Voorspelling
 
 # Voorspelt de volgende race zodra de kwalificatie in Jolpica staat en commit de JSON in
-# output/predictions/ naar main. Planning, rechten en problemen oplossen: docs/automation.md.
+# output/predictions/ en de top 3 in README.md naar main. Planning, rechten en problemen
+# oplossen: docs/automation.md.
 on:
   schedule:
-    # Elke 3 uur van vrijdag tot en met zondag (UTC), niet op het hele uur (minder vertraging).
-    # `f1 predict --next` beslist met de kalender of er iets te voorspellen is.
-    - cron: "17 */3 * * 5,6,0"
+    # Elk anderhalf uur van vrijdag tot en met zondag (UTC): 00:17, 01:47, 03:17, ..., 22:47.
+    # Niet op het hele uur (minder vertraging); GitHub laat geplande runs ook geregeld weg,
+    # dus liever veel pogingen. `f1 predict --next` beslist of er iets te voorspellen is.
+    - cron: "17 0-21/3 * * 5,6,0"
+    - cron: "47 1-22/3 * * 5,6,0"
   workflow_dispatch:
     inputs:
       season:
@@ -89,10 +92,15 @@ jobs:
             uv run f1 predict --next
           fi
 
+      # Ook als er nu niets te voorspellen was: de README volgt de laatste voorspelling vooraf
+      # en verandert alleen bij een nieuwe top 3.
+      - name: Top 3 in de README
+        run: uv run f1 readme
+
       - name: Committen naar main
         if: github.ref == 'refs/heads/main'
         run: |
-          git add output/
+          git add output/ README.md
           if git diff --cached --quiet; then
             echo "Geen nieuwe of gewijzigde voorspelling; niets te committen."
             exit 0
@@ -109,5 +117,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: predictions
-          path: output/predictions/
+          path: |
+            output/predictions/
+            README.md
           if-no-files-found: ignore

@@ -44,7 +44,7 @@ Zo ziet de repo eruit na fase 11 (opruimen). De website uit fase 13 komt er late
 f1-predictor/
 ├── .github/workflows/
 │   ├── ci.yml              # tests + linting bij elke push en pull request
-│   ├── predict.yml         # elke 3 uur vr-zo: data ophalen + volgende race voorspellen
+│   ├── predict.yml         # elk anderhalf uur vr-zo: data ophalen + volgende race voorspellen + top 3 in README
 │   └── post-race.yml       # na de race: uitslag, backtests, voorspelling vs. realiteit
 ├── config/
 │   └── config.yaml         # seizoenen, features, gekozen modellen, backtest
@@ -53,7 +53,7 @@ f1-predictor/
 │   ├── features/           # feature engineering
 │   ├── models/             # baselines, modellen, training, voorspellen
 │   ├── evaluation/         # metrics, backtests, modelselectie, historiek, verkenning
-│   └── cli.py              # `f1 fetch`, `features`, `backtest`, `tune`, `train`, `predict`, `evaluate`
+│   └── cli.py              # `f1 fetch`, `features`, `backtest`, `tune`, `train`, `predict`, `evaluate`, `readme`
 ├── tests/
 ├── data/                   # in .gitignore (raw/processed)
 ├── output/
@@ -64,7 +64,7 @@ f1-predictor/
 │   └── prediction_history.json
 ├── docs/                   # documentatie per onderwerp
 ├── pyproject.toml
-├── README.md
+├── README.md               # met de voorspelde top 3 van de laatste race (bijgewerkt door de bot)
 └── .gitignore
 ```
 
@@ -326,11 +326,11 @@ backtest:
 
 **Doel:** het project draait zichzelf.
 
-- [x] `predict.yml` met `schedule` (cron) en `workflow_dispatch`: data ophalen, volgende race voorspellen, naar `output/` schrijven en committen (`f1 fetch` + `f1 predict --next`; de bot commit alleen `output/` naar `main`, en alleen bij een inhoudelijke wijziging)
-- [x] Slim plannen: kwalificatie is meestal zaterdag, dus cron op zaterdagavond en zondagochtend; bepaal de "volgende race" via de F1-kalender (de kwalificatie valt tussen zaterdag 04:00 en 21:00 UTC en soms op vrijdag, dus draait de cron elke 3 uur van vrijdag tot en met zondag; de Jolpica-kalender beslist of de kwalificatie al begonnen en verwerkt is)
+- [x] `predict.yml` met `schedule` (cron) en `workflow_dispatch`: data ophalen, volgende race voorspellen, naar `output/` schrijven en committen (`f1 fetch` + `f1 predict --next`; de bot commit alleen `output/` naar `main`, en alleen bij een inhoudelijke wijziging; sinds november 2026 zet `f1 readme` ook de voorspelde top 3 in de README)
+- [x] Slim plannen: kwalificatie is meestal zaterdag, dus cron op zaterdagavond en zondagochtend; bepaal de "volgende race" via de F1-kalender (de kwalificatie valt tussen zaterdag 04:00 en 21:00 UTC en soms op vrijdag, dus draait de cron van vrijdag tot en met zondag, sinds november 2026 elk anderhalf uur omdat GitHub veel geplande runs wegliet; de Jolpica-kalender beslist of de kwalificatie al begonnen en verwerkt is)
 - [x] Tweede workflow na de race (maandag): echte uitslag ophalen, backtest bijwerken, voorspelling vs. realiteit vergelijken (`post-race.yml` op maandag, dinsdag als herkansing: de drie backtestsuites en `f1 evaluate` naar `output/prediction_history.json`; een voorspelling van vooraf wordt nooit door een retrospectieve vervangen)
 - [x] Dependencies en FastF1-cache cachen in Actions (uv-cache via `setup-uv`; FastF1 wordt niet gebruikt, dus in de plaats daarvan de ruwe Jolpica-data `data/raw/`, per jaar in de Actions-cache)
-- [x] Onthoud: geplande workflows kunnen vertraagd of overgeslagen worden en worden na 60 dagen inactiviteit uitgeschakeld (minstens zes pogingen per kwalificatie-tot-race-venster; na de winterstop weer aanzetten met `gh workflow enable`)
+- [x] Onthoud: geplande workflows kunnen vertraagd of overgeslagen worden en worden na 60 dagen inactiviteit uitgeschakeld (een twaalftal geplande pogingen per kwalificatie-tot-race-venster, maar geen garantie: bij twijfel handmatig starten; na de winterstop weer aanzetten met `gh workflow enable`)
 - [x] Houd de berekening hier, ook als er later een eigen (thuis)server is: die server haalt dan alleen de nieuwste JSON op (`git pull` of raw-URL) en hoeft geen Python/ML te draaien. Alternatief: dezelfde CLI via cron op de server (`uv run f1 fetch && uv run f1 predict --next`)
 - [x] **Documentatie bijgewerkt:** triggers, planning, rechten (geen secrets, alleen `contents: write`), gegenereerde bestanden, handmatig opnieuw uitvoeren en problemen oplossen staan in [`docs/automation.md`](docs/automation.md); `--next`, `f1 evaluate` en het JSON-contract van `prediction_history.json` in [`docs/usage.md`](docs/usage.md), de nieuwe tests in [`docs/testing.md`](docs/testing.md).
 

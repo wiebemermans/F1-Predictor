@@ -5,6 +5,7 @@ from pathlib import Path
 # src/f1_predictor/paths.py -> repo-root (werkt met de editable install van uv)
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "config" / "config.yaml"
+README_PATH = ROOT / "README.md"
 RAW_DIR = ROOT / "data" / "raw"
 CACHE_DIR = ROOT / "data" / "cache"
 PROCESSED_DIR = ROOT / "data" / "processed"

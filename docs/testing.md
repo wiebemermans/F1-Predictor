@@ -49,7 +49,8 @@ ondergrens van 90% laat ruimte voor zulke regels, maar vangt nieuwe code zonder 
 | `test_model_selection.py` | `summarize_backtest` met gepaarde ΔMAE, `ModelSpec`, de tuninggrid en selectieregels, de controle dat `config/config.yaml` uit de vastgelegde tuningrun volgt, tuning alleen op validatieseizoenen, de modelbacktest, het eindmodel, `model_comparison.json` (alleen herschreven bij een inhoudelijke wijziging) en `f1 backtest`, `f1 tune` en `f1 train`. |
 | `test_predict.py` | Deelnemerslijst uit de kwalificatie, de volgende race volgens de kalender (`next_race` en `race_to_predict` met een vaste klok: vóór, tijdens en na de kwalificatie, op de starttijd, na de laatste race), `predict_race` (retrospectief gelijk aan de backtestfold, negeert de eigen uitslag, live kwalificatie met nieuwe coureurs, te weinig historie), het JSON-contract, `latest.json`, de schrijfregels (alleen bij een inhoudelijke wijziging, een voorspelling vooraf blijft staan), het `run`-blok en `f1 predict` met `--season`/`--round` of `--next`. |
 | `test_history.py` | `f1 evaluate`: met de hand gecontroleerde scores van een voorspelling vooraf tegen de uitslag (ook als beide coureurslijsten verschillen), alleen voorspellingen vooraf met een uitslag, de modelnaam per race, een lege historiek, niet herschrijven zonder wijziging en de tabel. |
-| `test_workflows.py` | De workflows in `.github/workflows/`: elke `uv run f1 ...` noemt een bestaand commando met bestaande opties, en de twee automatische workflows zijn gepland, delen de concurrency-groep en committen alleen vanaf `main`. |
+| `test_readme.py` | `f1 readme`: de top 3 in voorspelde volgorde met een link naar de JSON, niet herschrijven zonder nieuwe top 3, een nieuwe GP of een gecorrigeerde top 3, retrospectieve voorspellingen overslaan, geen voorspelling, CRLF-regeleinden behouden, een ontbrekend of dubbel blok, en het blok in de echte `README.md`. |
+| `test_workflows.py` | De workflows in `.github/workflows/`: elke `uv run f1 ...` noemt een bestaand commando met bestaande opties, de twee automatische workflows zijn gepland, delen de concurrency-groep en committen alleen vanaf `main`, en `predict.yml` werkt na `predict` de README bij en commit die mee. |
 | `test_config.py` | Config inlezen, defaults en validatie, `--config`, de opties van `f1 fetch` en de hint naar `f1 fetch` bij ontbrekende data voor elk commando. |
 | `test_pipeline.py` | De integratietest en het raceweekend hieronder. |
 
@@ -57,10 +58,10 @@ ondergrens van 90% laat ruimte voor zulke regels, maar vangt nieuwe code zonder 
 
 [`tests/test_pipeline.py`](../tests/test_pipeline.py) voert de commando's uit zoals een nieuwe
 gebruiker dat doet: `f1 fetch`, `features`, de drie backtestsuites, `train`, `predict` voor
-een al gereden en een komende race, en `evaluate`. De commando's draaien via de echte CLI met
-een tijdelijk `config.yaml` (seizoenen 2023–2024, Ridge en een kleine XGBoost-ranker,
-`min_train_races: 1`). De pipeline loopt één keer per testrun; zeven tests controleren elk een
-stap. Een tweede run speelt een raceweekend na zoals de workflows het doorlopen (zie
+een al gereden en een komende race, `evaluate` en `readme`. De commando's draaien via de echte
+CLI met een tijdelijk `config.yaml` en een tijdelijke README (seizoenen 2023–2024, Ridge en een
+kleine XGBoost-ranker, `min_train_races: 1`). De pipeline loopt één keer per testrun; acht
+tests controleren elk een stap. Een tweede run speelt een raceweekend na zoals de workflows het doorlopen (zie
 [Raceweekend](#raceweekend)).
 
 **De data.** [`tests/fixtures/jolpica_mini.json`](../tests/fixtures/jolpica_mini.json) bevat
@@ -94,9 +95,10 @@ tijdelijke map mee.
   uit de kwalificatie (inclusief de rookie), en `latest.json` wijst naar die race.
 - `evaluate`: zonder voorspelling vooraf met een uitslag is de historiek leeg, maar het bestand
   bestaat.
+- `readme`: de README toont de komende race, niet de retrospectief voorspelde.
 
 **Vangnet.** Vóór en na de pipeline wordt een momentopname gemaakt van alle bestanden in de
-`data/`- en `output/`-map van de repository (grootte en wijzigingstijd). Verschillen die, dan
+`data/`- en `output/`-map van de repository en van `README.md` (grootte en wijzigingstijd). Verschillen die, dan
 faalt de test. Mist er een omleiding, bijvoorbeeld bij een nieuw commando, dan faalt de test
 dus in plaats van stilletjes vastgelegde uitvoer te overschrijven. Voeg bij een nieuw commando
 dat bestanden schrijft een omleiding toe in `_redirects` en het commando aan `COMMANDS`.
@@ -104,21 +106,23 @@ dat bestanden schrijft een omleiding toe in `_redirects` en het commando aan `CO
 ### Raceweekend
 
 De fixture `weekend` doorloopt in een eigen tijdelijke map de stappen van de workflows rond
-2024-2 (kwalificatie zaterdag 15:00 UTC, race zondag 14:00 UTC), met een vaste klok per stap:
+2024-2 (kwalificatie zaterdag 15:00 UTC, race zondag 14:00 UTC), met een vaste klok per stap.
+Zoals in `predict.yml` volgt op elke `predict --next` een `readme`:
 
-1. `fetch`, daarna `predict --next` op vrijdag: niets te voorspellen.
+1. `fetch`, daarna `predict --next` op vrijdag: niets te voorspellen; de README blijft gelijk.
 2. `predict --next` tijdens de kwalificatie, terwijl Jolpica nog geen uitslag heeft: niets.
-3. `predict --next` na de kwalificatie: `2024-02.json` met `result_known: false`. Een latere run
-   die zaterdag herschrijft niets.
+3. `predict --next` na de kwalificatie: `2024-02.json` met `result_known: false`, en de top 3
+   daarvan in de README. Een latere run die zaterdag herschrijft niets.
 4. De uitslag komt binnen: `fetch --force` (2024 is voor `fetch` een afgesloten seizoen).
 5. `predict --next` op zondagavond: de volgende race is ronde 3, waarvan de kwalificatie nog
    moet komen. Een retrospectieve `predict --season 2024 --round 2` laat de voorspelling vooraf
-   staan.
+   en de README staan.
 6. De drie backtestsuites en `evaluate`: de historiek scoort de voorspelling vooraf tegen de
    uitslag, met de coureurs die in beide lijsten staan; de kwalificatiebaseline is met de hand
    gecontroleerd.
 
-Ook hier faalt de test als er iets in de `data/`- of `output/`-map van de repository verandert.
+Ook hier faalt de test als er iets in de `data/`- of `output/`-map of in `README.md` van de
+repository verandert.
 
 **Niet afgedekt.** De echte API (netwerk), `f1 tune` (vaste validatieseizoenen 2015–2021 en een
 grid van ongeveer 45 minuten; de selectieregels hebben eigen tests), modelkwaliteit (de data
