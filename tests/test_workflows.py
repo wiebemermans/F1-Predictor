@@ -66,3 +66,13 @@ def test_automation_workflows_are_scheduled_and_commit_only_from_main(name):
         step for step in _steps(workflow) if step.get("uses", "").startswith("actions/checkout")
     )
     assert checkout["with"]["ref"] == "${{ github.ref }}"
+
+
+def test_predict_workflow_updates_and_commits_the_readme():
+    runs = [step.get("run", "") for step in _steps(_workflow("predict.yml"))]
+    predict = next(i for i, run in enumerate(runs) if "f1 predict" in run)
+    readme = next(i for i, run in enumerate(runs) if "f1 readme" in run)
+    commit = next(i for i, run in enumerate(runs) if "git push" in run)
+
+    assert predict < readme < commit
+    assert "git add output/ README.md" in runs[commit]

@@ -44,6 +44,7 @@ uv run f1 train                           # model.final -> output/models/ + outp
 uv run f1 predict --season 2026 --round 22   # after qualifying -> output/predictions/2026-22.json + latest.json
 uv run f1 predict --next                  # next race from the calendar; exit 0 with "niets te voorspellen" before qualifying
 uv run f1 evaluate                        # pre-race predictions vs. results -> output/prediction_history.json
+uv run f1 readme                          # top 3 of the latest pre-race prediction -> block in README.md
 uv run python -m f1_predictor.evaluation.explore   # phase 4 report -> output/ + docs/phase4_exploration.md
 ```
 
@@ -89,20 +90,24 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
   `output.py` (atomic writes, `write_json` with NaN -> null, `write_json_if_changed` which
   ignores `generated_at` and `run` so scheduled runs without new data commit nothing). Bump
   `schema_version` when a JSON field is removed or renamed (contract in `docs/usage.md`).
-- `.github/workflows/` – `ci.yml` (lint + tests), `predict.yml` (every 3 h Fri–Sun:
-  `fetch` + `predict --next`) and `post-race.yml` (Mon/Tue: `fetch`, three backtest suites,
-  `evaluate`). The two automation workflows push only `output/` to `main` as
-  github-actions[bot]; `tests/test_workflows.py` checks that every `uv run f1 ...` in them
-  exists.
-- `src/f1_predictor/paths.py` – all paths (`CONFIG_PATH`, `RAW_DIR`, `CACHE_DIR`,
+  `readme.py` – `update_readme` (`f1 readme`): writes the top 3 of the latest pre-race
+  prediction between `<!-- voorspelling:start -->` / `<!-- voorspelling:end -->` in
+  `README.md`, only when that block changes; keeps the file's line endings.
+- `.github/workflows/` – `ci.yml` (lint + tests), `predict.yml` (every 1.5 h Fri–Sun, two cron
+  lines at :17 and :47: `fetch` + `predict --next` + `readme`) and `post-race.yml` (Mon/Tue:
+  `fetch`, three backtest suites, `evaluate`). The two automation workflows push only
+  `output/` (and `predict.yml` the README block) to `main` as github-actions[bot];
+  `tests/test_workflows.py` checks that every `uv run f1 ...` in them exists.
+- `src/f1_predictor/paths.py` – all paths (`CONFIG_PATH`, `README_PATH`, `RAW_DIR`, `CACHE_DIR`,
   `PROCESSED_DIR`, `OUTPUT_DIR`, `PREDICTIONS_DIR`). Use these instead of relative paths.
   Library defaults like `data_dir=RAW_DIR` are bound at import, so tests pass explicit paths.
 - `tests/` – one file per module area; `test_models.py` holds the contract test every
   `RacePredictor` (both baselines + each family in `MODEL_FAMILIES`) must pass.
   `test_pipeline.py` runs the whole CLI on `tests/fixtures/jolpica_mini.json` with paths
   redirected to a temp folder (`_redirects`), plus a race-weekend run with a fixed clock; a new
-  command that writes files needs a redirect there, or the repo-snapshot guard fails the test.
-  Tests never read `data/` and never write to `output/`.
+  command that writes files needs a redirect there, or the repo-snapshot guard (`data/`,
+  `output/`, `README.md`) fails the test. Tests never read `data/` and never write to
+  `output/` or `README.md`.
 - `data/` is git-ignored; `output/` CSVs and JSON are committed on purpose.
 
 ## Domain rules that are easy to get wrong
@@ -131,8 +136,8 @@ Python >= 3.13, Ruff line length 100, rules E/F/I/UP/B.
 
 - Feature branches named `feat/...`, `docs/...`, `chore/...`, `fix/...`; merge via PR into `main`.
   Never push to `main` unless explicitly asked. Remote: `origin`
-  (github.com/wiebemermans/F1-Predictor). The automation bot pushing `output/` to `main` is the
-  user's explicit choice (phase 10); this rule is for agents. Pull before working on `output/`
-  locally: the bot commits there on race weekends.
+  (github.com/wiebemermans/F1-Predictor). The automation bot pushing `output/` (and the README
+  block) to `main` is the user's explicit choice (phase 10); this rule is for agents. Pull before
+  working on `output/` or `README.md` locally: the bot commits there on race weekends.
 - The agent instructions mention a Copilot co-author line; that applies to Copilot's commits.
   Commits made by Claude use Claude's own co-author line.

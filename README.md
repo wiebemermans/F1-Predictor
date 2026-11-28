@@ -6,6 +6,14 @@ Een machine-learningmodel dat de uitslag van Formule 1-races voorspelt, getest m
 
 Data: [Jolpica-F1](https://github.com/jolpica/jolpica-f1) API.
 
+## Laatste voorspelling
+
+<!-- voorspelling:start -->
+Nog geen voorspelling. Na de volgende kwalificatie verschijnt hier de voorspelde top 3.
+<!-- voorspelling:end -->
+
+Dit blok wordt automatisch bijgewerkt na elke kwalificatie ([docs/automation.md](docs/automation.md)).
+
 ## Transparantie
 
 Dit project is grotendeels ontwikkeld met hulp van een large language model (LLM). De code en resultaten worden waar mogelijk gecontroleerd met tests, linting en reproduceerbare analyses; LLM-gebruik vervangt die controles of menselijke beoordeling niet.
@@ -42,10 +50,10 @@ startposities. Instellingen staan in [`config/config.yaml`](config/config.yaml);
 commando's, configuratievelden en het JSON-formaat staan in [docs/usage.md](docs/usage.md).
 
 Elk raceweekend gebeurt dat ook automatisch: een GitHub Actions-workflow voorspelt de volgende
-race zodra de kwalificatie verwerkt is (`f1 predict --next`) en commit de JSON in
-`output/predictions/`. Na de race worden de backtests bijgewerkt en zet
-`output/prediction_history.json` elke voorspelling van vooraf naast de uitslag. Zie
-[docs/automation.md](docs/automation.md).
+race zodra de kwalificatie verwerkt is (`f1 predict --next`), commit de JSON in
+`output/predictions/` en zet de top 3 bovenaan deze README (`f1 readme`). Na de race worden
+de backtests bijgewerkt en zet `output/prediction_history.json` elke voorspelling van vooraf
+naast de uitslag. Zie [docs/automation.md](docs/automation.md).
 
 ## Backtests en model
 

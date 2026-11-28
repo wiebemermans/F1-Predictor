@@ -1,16 +1,17 @@
 # Fase 10: Automatisering met GitHub Actions
 
 Twee geplande workflows laten het project zichzelf draaien. Na elke kwalificatie voorspelt
-`predict.yml` de race. Na het raceweekend haalt `post-race.yml` de uitslag op, werkt de
-backtests bij en zet de voorspelling van vooraf naast de werkelijkheid. Al het rekenwerk gebeurt
-in GitHub Actions; het resultaat zijn JSON- en CSV-bestanden in `output/` op `main`. Een website
-of een eigen server hoeft die bestanden alleen te lezen.
+`predict.yml` de race en zet de voorspelde top 3 bovenaan de README. Na het raceweekend haalt
+`post-race.yml` de uitslag op, werkt de backtests bij en zet de voorspelling van vooraf naast de
+werkelijkheid. Al het rekenwerk gebeurt in GitHub Actions; het resultaat zijn JSON- en
+CSV-bestanden in `output/` op `main`. Een website of een eigen server hoeft die bestanden alleen
+te lezen.
 
 ## Overzicht
 
 | Workflow | Wanneer | Wat | Commit naar `main` |
 |---|---|---|---|
-| [`predict.yml`](../.github/workflows/predict.yml) ("Voorspelling") | elke 3 uur van vrijdag tot en met zondag (UTC, op :17); handmatig; op een PR die deze workflow wijzigt | `f1 fetch`, daarna `f1 predict --next` | `output/predictions/{seizoen}-{ronde}.json` en `latest.json` |
+| [`predict.yml`](../.github/workflows/predict.yml) ("Voorspelling") | elk anderhalf uur van vrijdag tot en met zondag (UTC, op :17 en :47); handmatig; op een PR die deze workflow wijzigt | `f1 fetch`, `f1 predict --next`, daarna `f1 readme` | `output/predictions/{seizoen}-{ronde}.json`, `latest.json` en de top 3 in `README.md` |
 | [`post-race.yml`](../.github/workflows/post-race.yml) ("Na de race") | maandag en dinsdag 06:41 UTC; handmatig; op een PR die deze workflow wijzigt | `f1 fetch`, de drie backtestsuites, `f1 evaluate` | `output/backtest_*.csv`, `model_comparison.csv/.json`, `prediction_history.json` |
 | [`ci.yml`](../.github/workflows/ci.yml) | elke push naar `main` en elke PR | lint en tests ([testing.md](testing.md#ci)) | nooit |
 
@@ -26,17 +27,22 @@ Saoedi-Arabië in 2024). Eén vaste cron op "zaterdagavond en zondagochtend" mis
 Australië en Japan begint de race al zondag rond 05:00 UTC.
 
 Daarom draait `predict.yml` vaak en beslist de kalender of er iets te doen is (zie hieronder).
-Elke 3 uur van vrijdag tot en met zondag levert minstens zes pogingen in elk venster op. Een
-vertraagde of overgeslagen run kost dus hooguit een paar uur. De runs vallen op :17, omdat
-GitHub geplande runs op het hele uur het vaakst vertraagt. Een run zonder werk is kort:
-installeren, het lopende seizoen ophalen en de kalender bekijken (een publieke repository heeft
-onbeperkt Actions-minuten).
+Hij draait elk anderhalf uur van vrijdag tot en met zondag: om :17 elke drie uur (00:17, 03:17,
+...) en om :47 daartussen (01:47, 04:47, ...). Cron kent geen interval van 90 minuten, vandaar
+twee regels. Tussen het einde van de kwalificatie en de start van de race zit minstens zo'n
+twintig uur, dus elk venster krijgt een twaalftal geplande pogingen. Dat zijn er bewust veel:
+GitHub vertraagt geplande runs of laat ze weg (zie [Aandachtspunten](#aandachtspunten)). De
+runs vallen niet op het hele uur, omdat GitHub dan het drukst is. Een run zonder werk duurt
+ongeveer een halve minuut: installeren, het lopende seizoen ophalen en de kalender bekijken (een
+publieke repository heeft onbeperkt Actions-minuten).
 
-| Race (2026) | Kwalificatie (UTC) | Race (UTC) | Eerste run na de kwalificatie |
+| Race (2026) | Kwalificatie (UTC) | Race (UTC) | Eerste geplande run na de kwalificatie |
 |---|---|---|---|
-| Las Vegas | za 04:00 | zo 04:00 | za 06:17 |
-| Qatar | za 18:00 | zo 16:00 | za 21:17 (de run van 18:17 valt tijdens de kwalificatie) |
-| Verenigde Staten | za 21:00 | zo 20:00 | zo 00:17 |
+| Las Vegas | za 04:00 | zo 04:00 | za 06:17 (de run van 04:47 valt tijdens de kwalificatie) |
+| Qatar | za 18:00 | zo 16:00 | za 19:47 (de run van 18:17 valt tijdens de kwalificatie) |
+| Verenigde Staten | za 21:00 | zo 20:00 | za 22:47 (de run van 21:17 valt tijdens de kwalificatie) |
+
+Staat de uitslag dan nog niet in Jolpica, dan probeert de volgende run het opnieuw.
 
 `post-race.yml` draait maandagochtend, als de uitslag van zondag zeker in Jolpica staat. De run
 van dinsdag is een herkansing; als maandag gelukt is, verandert er niets en volgt er geen commit.
@@ -74,11 +80,15 @@ Beide workflows beginnen hetzelfde:
    dan gaat ze meteen terug in de cache, ook als een latere stap faalt.
 
 Daarna doet `predict.yml` `f1 predict --next`, of `f1 predict --season S --round R` als die
-invoer bij een handmatige run is ingevuld. `post-race.yml` doet `f1 backtest --suite baselines`,
-`--suite features` en `f1 backtest` (samen enkele minuten), daarna `f1 evaluate`.
+invoer bij een handmatige run is ingevuld. Daarna volgt altijd `f1 readme`, ook als er niets te
+voorspellen was: dat zet de top 3 van de laatste voorspelling van vóór de race tussen de
+markeringen `<!-- voorspelling:start -->` en `<!-- voorspelling:end -->` in `README.md`
+([usage.md](usage.md#top-3-in-de-readme-f1-readme)). `post-race.yml` doet
+`f1 backtest --suite baselines`, `--suite features` en `f1 backtest` (samen enkele minuten),
+daarna `f1 evaluate`.
 
-Tot slot de commit, alleen op `main`. `git add output/`; is er niets gewijzigd, dan stopt de
-stap. Anders volgt een commit door `github-actions[bot]`, `git pull --rebase` en een push. Op een
+Tot slot de commit, alleen op `main`. `git add output/` (in `predict.yml` ook `README.md`); is
+er niets gewijzigd, dan stopt de stap. Anders volgt een commit door `github-actions[bot]`, `git pull --rebase` en een push. Op een
 andere branch of een PR wordt er nooit gecommit: de uitvoer komt dan als artefact bij de run. Zo
 kan een wijziging aan een workflow op de PR zelf getest worden.
 
@@ -97,6 +107,9 @@ runs elkaars werk overdoen, gaat er niets verloren.
   wordt nooit vervangen door een retrospectieve (`result_known: true`), ook niet bij een
   handmatige run na de race. Een gecorrigeerde kwalificatie vóór de race geeft wel een nieuwe
   versie. Zo kan `f1 evaluate` na de race precies de voorspelling scoren die vooraf vastlag.
+- **De README alleen bij een nieuwe top 3.** Het blok in `README.md` verandert bij de
+  voorspelling van een nieuwe GP, of als een gecorrigeerde kwalificatie vóór de race de top 3
+  van dezelfde GP verandert. Na de race blijft de top 3 staan tot de volgende kwalificatie.
 - **Linux en Windows verschillen bij XGBoost.** De vastgelegde CSV's zijn op Windows gemaakt,
   de workflows draaien op Linux. Een test op de PR (november 2026, zelfde data en
   bibliotheekversies) gaf voor de baselines, Ridge en de featurebacktest byte-identieke CSV's.
@@ -112,7 +125,8 @@ runs elkaars werk overdoen, gaat er niets verloren.
 
 Er zijn geen secrets nodig: Jolpica is een open API. De workflows vragen voor het automatische
 `GITHUB_TOKEN` alleen `contents: write`, om te kunnen pushen. De bot pusht rechtstreeks naar
-`main` en raakt daarbij alleen `output/`. Dat is een bewuste keuze. De regel "nooit naar `main`
+`main` en raakt daarbij alleen `output/` en het voorspellingsblok in `README.md`. Dat is een
+bewuste keuze. De regel "nooit naar `main`
 pushen" uit de LLM-instructies geldt voor agents die code wijzigen, niet voor deze bot. Een push
 met `GITHUB_TOKEN` start geen nieuwe workflows, dus ook geen CI. Dat is hier geen gemis: de bot
 wijzigt geen code.
@@ -141,6 +155,7 @@ moeten de workflows naar een aparte branch committen.
 |---|---|---|
 | `output/predictions/{seizoen}-{ronde}.json` | `predict.yml` | de voorspelling van vóór de race ([contract](usage.md#voorspelling-outputpredictionsseizoen-rondejson)) |
 | `output/predictions/latest.json` | `predict.yml` | kopie van de chronologisch laatste voorspelling |
+| `README.md` (alleen het blok tussen de markeringen) | `predict.yml` | de voorspelde top 3 van de laatste race, met een link naar de JSON |
 | `output/backtest_baselines.csv`, `backtest_features.csv`, `backtest_models.csv`, `model_comparison.csv` | `post-race.yml` | scores per race en samenvattingen, nu inclusief de laatste race |
 | `output/model_comparison.json` | `post-race.yml` | samenvatting voor een website ([contract](usage.md#modelvergelijking-outputmodel_comparisonjson)) |
 | `output/prediction_history.json` | `post-race.yml` | elke voorspelling van vooraf naast de uitslag ([contract](usage.md#historiek-outputprediction_historyjson)) |
@@ -167,14 +182,21 @@ de race al gereden, dan is dat een retrospectieve voorspelling. Die vervangt een
 voorspelling van vooraf niet en telt niet mee in de historiek.
 
 Lokaal werken dezelfde commando's ([usage.md](usage.md)). Doe eerst `git pull`: de bot commit
-in `output/`, en een lokale voorspelling van een race die de bot al voorspelde, geeft anders een
-conflict.
+in `output/` en `README.md`, en een lokale voorspelling van een race die de bot al voorspelde,
+geeft anders een conflict.
 
 ## Aandachtspunten
 
 - **Vertraagde of overgeslagen runs.** GitHub garandeert geen exacte starttijd voor geplande
-  workflows; bij drukte schuiven ze op of vallen ze weg. De vele pogingen per venster vangen dat
-  op.
+  workflows; bij drukte schuiven ze op of vallen ze weg, zonder spoor in de lijst met runs.
+  Sinds eind augustus 2026 melden veel gebruikers runs die uren te laat starten of grotendeels
+  wegvallen. Bij dit project draaiden van 25 tot 28 november 2026 maar 3 van de ongeveer 13
+  geplande runs (de cron stond toen nog op elke 3 uur), één ervan ruim twee uur te laat. Daarom
+  draait de workflow elk anderhalf uur. Een garantie is dat niet: wil je de voorspelling snel na
+  de kwalificatie, start de workflow dan met de hand zodra de uitslag in Jolpica staat
+  (`https://api.jolpi.ca/ergast/f1/{seizoen}/{ronde}/qualifying.json`). Een betrouwbare
+  oplossing is een externe timer (bv. een eigen server) die `gh workflow run predict.yml`
+  aanroept.
 - **Uitgeschakeld na 60 dagen.** In een publieke repository schakelt GitHub geplande workflows
   uit als er 60 dagen geen activiteit (commits) is geweest, en mailt het vooraf. De winterstop is
   langer: na de laatste race (6 december 2026) en de bijbehorende commit valt dat rond begin
@@ -213,7 +235,8 @@ Moet de server toch zelf rekenen, dan volstaat dezelfde CLI in een cronjob:
 |---|---|
 | Rode run bij "Data ophalen" of "Voorspellen" met `Jolpica-API niet bereikbaar` | Jolpica is tijdelijk onbereikbaar of beperkt het aantal requests (de client probeert HTTP 429/5xx tot vijf keer). Wacht en start de run opnieuw (`gh run rerun`). |
 | `Ronde(s) [21] van 2026 ontbreken in de lokale data` | De uitslag van de vorige race staat nog niet in Jolpica, of de fetch mislukte. Start de run later opnieuw. |
-| Geen voorspelling na de kwalificatie | Kijk in de log van de laatste run: "begint pas op" (de kalender wijkt af), "staat nog niet in Jolpica" (nog niet verwerkt). Start `predict.yml` met de hand zodra de uitslag er is. |
+| Geen voorspelling na de kwalificatie | Kijk in de log van de laatste run: "begint pas op" (de kalender wijkt af), "staat nog niet in Jolpica" (nog niet verwerkt). Staat er geen run na de kwalificatie in de lijst, dan heeft GitHub de geplande runs weggelaten. Start `predict.yml` met de hand zodra de uitslag er is. |
+| Rode run bij "Top 3 in de README" | `README.md` heeft niet precies één blok tussen `<!-- voorspelling:start -->` en `<!-- voorspelling:end -->`, bv. na een handmatige bewerking. De commitstap is dan overgeslagen, dus ook een nieuwe voorspelling staat nog niet op `main`. Zet de markeringen terug en start de workflow opnieuw. |
 | De commitstap faalt bij `git pull --rebase` | Iemand wijzigde tegelijk dezelfde bestanden in `output/`. Start de workflow opnieuw: hij begint dan van de nieuwste stand en commit alleen wat nog ontbreekt. |
 | De push faalt met 403 | `GITHUB_TOKEN` mag niet schrijven. Controleer Settings → Actions → General → Workflow permissions en eventuele branch protection op `main`. |
 | Geen geplande runs meer | De workflow is uitgeschakeld (60 dagen zonder activiteit) of staat nog niet op `main`. Zet hem aan met `gh workflow enable`. |
